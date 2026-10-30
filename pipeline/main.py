@@ -1,6 +1,7 @@
 """One run = one Reel. Exit 0 on publish errors (no spammy retries); state in posted.json."""
 import json
 import random
+import re
 import shutil
 import smtplib
 import sys
@@ -9,7 +10,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import os
-from . import config, facebook, render, score, sources, token, tts, visuals, write
+from . import config, facebook, render, scenes, score, sources, token, tts, visuals, write
 
 
 def posts_last_24h(posted):
@@ -69,18 +70,29 @@ def main():
         print(f"[main] tts failed: {e}")
         alert("Nepal Canvas: TTS failed", str(e)); return
 
-    # cards
+    # scene plan: what is on screen while each sentence is spoken
     tpl = random.choice(visuals.TEMPLATES)
-    cards = [visuals.card(pack["headline"], work / "c0.png", tpl, kicker=pack.get("kicker", "आजको खबर"))]
-    for i, c in enumerate(pack.get("cards", []), 1):
-        cards.append(visuals.card(c, work / f"c{i}.png", tpl))
-    cards.append(visuals.card(pack.get("takeaway", ""), work / "c_end.png", tpl, kicker="तपाईंका लागि",
-                              small=f"स्रोत: {pack['source']}"))
-    # b-roll
-    broll = visuals.broll(pack.get("keywords", ["Nepal", "Kathmandu"]), work)
+    head = visuals.card(pack["headline"], work / "c0.png", tpl, kicker=pack.get("kicker", "आजको खबर"))
+    credit = visuals.card(pack.get("takeaway", ""), work / "c_end.png", tpl, kicker="तपाईंका लागि",
+                          small=f"स्रोत: {pack['source']}")
+    try:
+        plan = scenes.plan(pack["script"], pack["headline"], pack.get("category", "news")) if config.GEMINI_API_KEY else []
+    except Exception as e:
+        print(f"[main] scene plan failed: {e}"); plan = []
+    if not plan:  # fallback: whole script as one scene per card
+        cards = pack.get("cards") or [pack["headline"]]
+        sents = [t for t in re.split(r"(?<=[।!?])\s+", pack["script"]) if t.strip()]
+        k = max(len(sents) // max(len(cards), 1), 1)
+        plan = [{"text": " ".join(sents[i*k:(i+1)*k]) or c, "card": c, "subject": "", "query_en": kw, "source": "stock"}
+                for i, (c, kw) in enumerate(zip(cards, (pack.get("keywords") or ["Nepal"]) * 4))]
+    hits = 0
+    for i, sc in enumerate(plan):
+        sc["visual"] = scenes.fetch_for_scene(sc, work, i)
+        hits += bool(sc["visual"])
+    print(f"[main] scenes={len(plan)} visuals={hits}")
 
     out = work / "reel.mp4"
-    render.build(voice, vlen, cards, broll, work, out)
+    render.build(voice, vlen, head, credit, plan, work, out, tpl)
     caption = f"{pack.get('caption_ne', pack['headline'])}\n{pack.get('caption_en', '')}\n" \
               f"स्रोत: {pack['source']}\n{' '.join(pack['hashtags'])}"
     (work / "caption.txt").write_text(caption, encoding="utf-8")
