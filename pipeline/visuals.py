@@ -54,7 +54,6 @@ def card(text: str, path: Path, template: str, kicker: str = "", small: str = ""
         y += 110
     if small:
         d.text((80, H - 260), small, font=_font(38), fill=GREY if template != "cream" else NAVY2)
-    d.text((80, H - 160), "NEPAL CANVAS", font=_font(40, latin=True), fill=acc)
     im.save(path)
     return path
 
@@ -82,8 +81,11 @@ def pexels(keyword: str, n: int = 2, kind: str = "videos"):
     return out
 
 
+UA = {"User-Agent": "NepalCanvasBot/1.0 (https://facebook.com/nepalcanvasofficial; nepalcanvas22@gmail.com)"}
+
+
 def download(url: str, path: Path):
-    with requests.get(url, stream=True, timeout=60) as r:
+    with requests.get(url, stream=True, timeout=60, headers=UA) as r:
         r.raise_for_status()
         with open(path, "wb") as f:
             for chunk in r.iter_content(1 << 16):
