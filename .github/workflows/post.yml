@@ -21,7 +21,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 >/dev/null
       - run: pip install -q -r requirements.txt
       - name: Fetch fonts (OFL) if missing
@@ -51,4 +52,8 @@ jobs:
           git diff --cached --quiet || (git commit -m "post: $(date -u +%FT%TZ)" && git push)
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: reel-${{ github.run_id }}, path: out/*.mp4, retention-days: 7, if-no-files-found: ignore }
+        with:
+          name: reel-${{ github.run_id }}
+          path: out/**/*.mp4
+          retention-days: 7
+          if-no-files-found: ignore
