@@ -19,14 +19,15 @@ def fetch_article(link: str) -> str:
 
 def write(story: dict) -> dict:
     article = fetch_article(story["link"]) if story.get("link") else ""
-    res = llm.ask_json(
-        config.prompt("write"),
-        json.dumps({
-            "source": story["source"], "title": story["title"], "category": story["category"],
-            "rss_text": story["text"], "article_text": article or story["text"],
-        }, ensure_ascii=False),
-        temperature=0.5,
-    )
+    payload = {"source": story["source"], "title": story["title"], "category": story["category"],
+               "rss_text": story["text"], "article_text": article or story["text"]}
+    res = llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5)
+    if len(res.get("script", "").split()) < 110:  # too short for a 45-75 s Reel: one rewrite pass
+        payload["previous_script"] = res.get("script", "")
+        payload["instruction"] = "The previous script was too short. Rewrite it to 130-170 words, same facts only, add context and the 'what it means for you' part."
+        res2 = llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.6)
+        if len(res2.get("script", "").split()) > len(res.get("script", "").split()):
+            res = res2
     # hard rules regardless of what the model returned
     res["hashtags"] = (config.BASE_HASHTAGS + [h for h in res.get("hashtags", []) if h.startswith("#")])[:5]
     res["cards"] = [c[:60] for c in res.get("cards", [])][:4]
