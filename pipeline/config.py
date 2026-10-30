@@ -19,7 +19,7 @@ MAX_AGE_HOURS = 36
 RECENT_DAYS = 7
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]  # fallback order
+GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash"]  # fallback order
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
 FB_PAGE_ID = os.getenv("FB_PAGE_ID", "")
