@@ -26,9 +26,9 @@ def ask_json(system: str, user: str, temperature=0.4) -> dict:
                     timeout=90,
                 )
                 if r.status_code == 429:
-                    last = "429"
-                    time.sleep(60)
-                    continue
+                    last = "429"; time.sleep(60); continue
+                if r.status_code in (400, 403, 404):
+                    last = f"{r.status_code} {r.text[:120]}"; print(f"[llm] {model}: {last}"); break  # next model
                 r.raise_for_status()
                 text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
                 text = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.M).strip()
