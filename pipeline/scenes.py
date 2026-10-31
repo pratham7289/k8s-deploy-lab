@@ -61,7 +61,8 @@ def _imageinfo(titles: list[str], n: int):
         if not LICENSE_OK.search(lic):
             continue
         artist = re.sub(r"<[^>]+>", "", ii.get("extmetadata", {}).get("Artist", {}).get("value") or "").strip()[:60]
-        name = artist or re.sub(r"\.\w+$", "", title[5:])
+        name = artist if artist and not re.fullmatch(r"(?i)(myself|own work|self|unknown.*)", artist) \
+            else re.sub(r"\.\w+$", "", title[5:])
         out.append(("image", ii.get("thumburl") or ii.get("url"), 5, f"{name} ({lic}, Wikimedia Commons)"))
         if len(out) >= n:
             break
