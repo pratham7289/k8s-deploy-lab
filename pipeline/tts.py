@@ -31,6 +31,8 @@ GAP = 0.32                 # seconds of silence between chunks
 
 
 DRIFT_LIMIT = 0.35  # sentence-level estimate is noisy; only catch a clear slow-down
+RATE_OK = (9.5, 15.0)  # weighted chars per second; outside this a take is rushed, dragged or cut short
+TARGET_CPS = 12.0      # every Reel is levelled to this pace so all videos sound the same
 
 
 def _weight(s: str) -> int:
@@ -114,13 +116,13 @@ def _gemini_chunked(text: str, path: Path) -> bool:
     rates = []
     for ch, wav in wavs:
         d = duration(wav)
-        rates.append(len(ch) / max(d, 0.1))
-    med = statistics.median(rates)
+        rates.append(_weight(ch) / max(d, 0.1))
+    med = TARGET_CPS
     levelled = []
     for (ch, wav), rate in zip(wavs, rates):
         factor = med / rate  # >1 means this chunk is slow -> speed up
         if abs(factor - 1) > RATE_TOLERANCE:
-            factor = max(0.85, min(1.2, factor))
+            factor = max(0.8, min(1.25, factor))
             out = wav.with_name(wav.stem + "_l.wav")
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-af", f"atempo={factor:.3f}",
                             str(out)], check=True)
@@ -156,6 +158,10 @@ def _gemini_single(text: str, path: Path, sentences: list[str]) -> bool:
     if not model:
         return False
     wav = _trim(wav)
+    rate = sum(_weight(s) for s in sentences) / max(duration(wav), 0.1)
+    print(f"[tts] single take rate={rate:.1f} chars/s")
+    if not RATE_OK[0] <= rate <= RATE_OK[1]:
+        return False
     times = sentence_times(wav, sentences)
     if len(times) >= 4:
         half = len(times) // 2
@@ -171,8 +177,9 @@ def _gemini_single(text: str, path: Path, sentences: list[str]) -> bool:
 
 
 def _gemini(text: str, path: Path, sentences: list[str]) -> bool:
-    if _gemini_single(text, path, sentences):
-        return True
+    for _ in range(2):
+        if _gemini_single(text, path, sentences):
+            return True
     print("[tts] single take rejected -> chunked + levelled")
     return _gemini_chunked(text, path)
 
