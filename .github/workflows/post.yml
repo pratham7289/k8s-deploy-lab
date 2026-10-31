@@ -58,6 +58,8 @@ jobs:
         if: always()
         with:
           name: reel-${{ github.run_id }}
-          path: out/**/*.mp4
+          path: |
+            out/*/reel.mp4
+            out/*/caption.txt
           retention-days: 7
           if-no-files-found: ignore
