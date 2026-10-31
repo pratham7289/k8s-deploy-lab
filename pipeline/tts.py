@@ -30,7 +30,12 @@ RATE_TOLERANCE = 0.10      # chunks faster/slower than median by more than this 
 GAP = 0.32                 # seconds of silence between chunks
 
 
-DRIFT_LIMIT = 0.15
+DRIFT_LIMIT = 0.35  # sentence-level estimate is noisy; only catch a clear slow-down
+
+
+def _weight(s: str) -> int:
+    """Spoken length estimate: a digit is read as a whole word, so count it ~4 chars."""
+    return len(s) + 3 * len(re.findall(r"[0-9०-९]", s))
 
 
 def voice_for_today() -> str:
@@ -155,7 +160,7 @@ def _gemini_single(text: str, path: Path, sentences: list[str]) -> bool:
     if len(times) >= 4:
         half = len(times) // 2
         def cps(ts, ss):
-            return sum(len(x) for x in ss) / max(sum(b - a for a, b in ts), 0.1)
+            return sum(_weight(x) for x in ss) / max(sum(b - a for a, b in ts), 0.1)
         r1, r2 = cps(times[:half], sentences[:half]), cps(times[half:], sentences[half:])
         drift = abs(r2 / r1 - 1)
         print(f"[tts] single take {model} voice={VOICE} drift={drift:.2f}")
@@ -214,7 +219,7 @@ def sentence_times(path: Path, sentences: list[str]) -> list[tuple[float, float]
     if n <= 1:
         return [(0.0, total)]
     mids = [(a + b) / 2 for a, b in _silences(path) if 0.2 < (a + b) / 2 < total - 0.2]
-    lens = [max(len(s), 1) for s in sentences]
+    lens = [max(_weight(s), 1) for s in sentences]
     bounds, t_prev = [], 0.0
     for k in range(n - 1):
         rest = sum(lens[k:])
