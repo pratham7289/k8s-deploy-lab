@@ -6,7 +6,7 @@ import requests
 
 from . import config, llm, sources
 
-MIN_WORDS, MAX_WORDS = 85, 115
+MIN_WORDS, MAX_WORDS = 55, 85
 DIGIT_OR_LATIN = re.compile(r"[0-9०-९A-Za-z]")
 
 
@@ -47,15 +47,15 @@ def write(story: dict, shorter: bool = False) -> dict:
     payload = {"source": story["source"], "title": story["title"], "category": story["category"],
                "rss_text": story["text"], "article_text": article or story["text"]}
     if shorter:
-        payload["instruction"] = "Keep it to 80-95 words in total. Same facts only."
+        payload["instruction"] = "Keep it to 55-65 words in total. Same facts only."
     res = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
     w = _words(res)
     if not MIN_WORDS <= w <= MAX_WORDS:  # one rewrite pass towards the target length
         payload["previous_sentences"] = res.get("sentences", [])
-        payload["instruction"] = (f"The previous version had {w} words. Rewrite it to 90-110 words in total, "
+        payload["instruction"] = (f"The previous version had {w} words. Rewrite it to 65-80 words in total, "
                                   "same facts only, hook first, same JSON format.")
         res2 = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
-        if abs(_words(res2) - 100) < abs(w - 100):
+        if abs(_words(res2) - 72) < abs(w - 72):
             res = res2
     # hard rules regardless of what the model returned
     for s in res["sentences"]:
