@@ -1,9 +1,13 @@
-"""Turn one story into script + cards + caption + b-roll keywords."""
+"""Turn one story into a short hook-first script (spoken + on-screen forms), cards and caption."""
 import json
+import re
 
 import requests
 
 from . import config, llm, sources
+
+MIN_WORDS, MAX_WORDS = 85, 115
+DIGIT_OR_LATIN = re.compile(r"[0-9०-९A-Za-z]")
 
 
 def fetch_article(link: str) -> str:
@@ -17,23 +21,49 @@ def fetch_article(link: str) -> str:
         return ""
 
 
-def write(story: dict) -> dict:
+def split_sentences(text: str) -> list[str]:
+    return [s.strip() for s in re.split(r"(?<=[।!?])\s+", text.strip()) if s.strip()]
+
+
+def finish(res: dict) -> dict:
+    """Normalise a pack: sentences [{say, show}] + script (spoken) + subtitle lines."""
+    sents = [s for s in res.get("sentences") or [] if isinstance(s, dict) and s.get("say", "").strip()]
+    if not sents and res.get("script"):
+        sents = [{"say": s, "show": s} for s in split_sentences(res["script"])]
+    for s in sents:
+        s["say"] = s["say"].strip()
+        s["show"] = (s.get("show") or s["say"]).strip()
+    res["sentences"] = sents
+    res["script"] = " ".join(s["say"] for s in sents)
+    return res
+
+
+def _words(res: dict) -> int:
+    return len(res.get("script", "").split())
+
+
+def write(story: dict, shorter: bool = False) -> dict:
     article = fetch_article(story["link"]) if story.get("link") else ""
     payload = {"source": story["source"], "title": story["title"], "category": story["category"],
                "rss_text": story["text"], "article_text": article or story["text"]}
-    res = llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5)
-    if len(res.get("script", "").split()) < 110:  # too short for a 45-75 s Reel: one rewrite pass
-        payload["previous_script"] = res.get("script", "")
-        payload["instruction"] = "The previous script was too short. Rewrite it to 130-170 words, same facts only, add context and the 'what it means for you' part."
-        res2 = llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.6)
-        if len(res2.get("script", "").split()) > len(res.get("script", "").split()):
+    if shorter:
+        payload["instruction"] = "Keep it to 80-95 words in total. Same facts only."
+    res = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
+    w = _words(res)
+    if not MIN_WORDS <= w <= MAX_WORDS:  # one rewrite pass towards the target length
+        payload["previous_sentences"] = res.get("sentences", [])
+        payload["instruction"] = (f"The previous version had {w} words. Rewrite it to 90-110 words in total, "
+                                  "same facts only, hook first, same JSON format.")
+        res2 = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
+        if abs(_words(res2) - 100) < abs(w - 100):
             res = res2
     # hard rules regardless of what the model returned
+    for s in res["sentences"]:
+        if DIGIT_OR_LATIN.search(s["say"]):
+            print(f"[write] digits/latin left in spoken text: {s['say'][:60]}")
     res["hashtags"] = (config.BASE_HASHTAGS + [h for h in res.get("hashtags", []) if h.startswith("#")])[:5]
     res["cards"] = [c[:60] for c in res.get("cards", [])][:4]
-    res["headline"] = res.get("headline", story["title"])[:70]
+    res["headline"] = res.get("headline", story["title"])[:60]
     res["source"] = story["source"]
-    words = len(res.get("script", "").split())
-    if words < 90 or words > 200:
-        print(f"[write] script {words} words – outside 90-200, still using")
+    print(f"[write] {_words(res)} words, {len(res['sentences'])} sentences")
     return res

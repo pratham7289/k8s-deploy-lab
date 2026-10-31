@@ -1,8 +1,10 @@
 """Nepali voice-over.
-Primary: Gemini TTS (free tier, natural news-anchor delivery, Nepali supported).
-The script is read in short chunks with the same voice and style; each chunk's speaking rate is
-measured and levelled to the median so the delivery stays even from first sentence to last.
-Fallback: edge-tts Microsoft neural voices (no key).
+Primary: Gemini TTS, one locked voice (Aoede), the whole script in ONE request so tone and pace
+stay the same throughout (and it costs one TTS call per Reel).
+If the single take drifts in pace (first half vs second half differ by more than 15%), it is redone
+in short chunks whose speaking rate is levelled to the median.
+Fallback: edge-tts Microsoft neural voice (no key).
+sentence_times() finds when each sentence is spoken (pauses in the audio), for subtitles and cuts.
 """
 import asyncio
 import base64
@@ -18,8 +20,7 @@ import requests
 from . import config
 
 GEMINI_TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gemini-2.5-flash-preview-tts"]
-# Two prebuilt voices that read Devanagari well; alternate daily like a two-anchor desk.
-GEMINI_VOICES = ["Aoede", "Charon"]
+VOICE = "Aoede"  # locked: one anchor voice for the Page
 STYLE = ("Read this as a calm, confident Nepali television news anchor speaking to viewers. "
          "Natural Nepali pronunciation, clear diction, a steady medium pace that stays exactly the same "
          "from the first word to the last, short pauses at sentence ends, slight emphasis on key facts, "
@@ -29,8 +30,11 @@ RATE_TOLERANCE = 0.10      # chunks faster/slower than median by more than this 
 GAP = 0.32                 # seconds of silence between chunks
 
 
+DRIFT_LIMIT = 0.15
+
+
 def voice_for_today() -> str:
-    return GEMINI_VOICES[date.today().toordinal() % len(GEMINI_VOICES)]
+    return VOICE
 
 
 def chunks(text: str) -> list[str]:
@@ -91,7 +95,7 @@ def _trim(wav: Path) -> Path:
     return out
 
 
-def _gemini(text: str, path: Path) -> bool:
+def _gemini_chunked(text: str, path: Path) -> bool:
     voice = voice_for_today()
     parts = chunks(text)
     wavs, model = [], None
@@ -131,10 +135,41 @@ def _gemini(text: str, path: Path) -> bool:
     joined = path.with_name("tts_all.wav")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
                     "-ar", "24000", "-ac", "1", str(joined)], check=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-af", "loudnorm=I=-16:TP=-1.5:LRA=9",
-                    "-ar", "48000", "-b:a", "160k", str(path)], check=True)
+    _finish(joined, path)
     print(f"[tts] gemini {model} voice={voice} chunks={len(parts)} rate_spread={min(rates)/med:.2f}-{max(rates)/med:.2f}")
     return True
+
+
+def _finish(wav: Path, path: Path):
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-af", "loudnorm=I=-16:TP=-1.5:LRA=9",
+                    "-ar", "48000", "-b:a", "160k", str(path)], check=True)
+
+
+def _gemini_single(text: str, path: Path, sentences: list[str]) -> bool:
+    wav = path.with_name("tts_one.wav")
+    model = _gemini_call(text, VOICE, wav)
+    if not model:
+        return False
+    wav = _trim(wav)
+    times = sentence_times(wav, sentences)
+    if len(times) >= 4:
+        half = len(times) // 2
+        def cps(ts, ss):
+            return sum(len(x) for x in ss) / max(sum(b - a for a, b in ts), 0.1)
+        r1, r2 = cps(times[:half], sentences[:half]), cps(times[half:], sentences[half:])
+        drift = abs(r2 / r1 - 1)
+        print(f"[tts] single take {model} voice={VOICE} drift={drift:.2f}")
+        if drift > DRIFT_LIMIT:
+            return False
+    _finish(wav, path)
+    return True
+
+
+def _gemini(text: str, path: Path, sentences: list[str]) -> bool:
+    if _gemini_single(text, path, sentences):
+        return True
+    print("[tts] single take rejected -> chunked + levelled")
+    return _gemini_chunked(text, path)
 
 
 async def _edge(text, voice, path):
@@ -142,14 +177,15 @@ async def _edge(text, voice, path):
     await edge_tts.Communicate(text, voice, rate="-6%", pitch="-2Hz").save(str(path))
 
 
-def synth(text: str, path: Path) -> float:
+def synth(text: str, path: Path, sentences: list[str] | None = None) -> float:
+    sentences = sentences or [x for x in re.split(r"(?<=[।!?])\s+", text.strip()) if x.strip()]
     if config.GEMINI_API_KEY:
         try:
-            if _gemini(text, path):
+            if _gemini(text, path, sentences):
                 return duration(path)
         except Exception as e:
             print(f"[tts] gemini pipeline failed: {e}")
-    voice = config.VOICES[date.today().toordinal() % len(config.VOICES)]
+    voice = "ne-NP-HemkalaNeural"  # female, to match Aoede
     asyncio.run(_edge(text, voice, path))
     print(f"[tts] edge-tts fallback voice={voice}")
     return duration(path)
@@ -160,3 +196,31 @@ def duration(path: Path) -> float:
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
         capture_output=True, text=True, check=True).stdout.strip()
     return float(out)
+
+
+def _silences(path: Path) -> list[tuple[float, float]]:
+    err = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(path), "-af", "silencedetect=noise=-35dB:d=0.15",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", err)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", err)]
+    return list(zip(starts, ends))
+
+
+def sentence_times(path: Path, sentences: list[str]) -> list[tuple[float, float]]:
+    """(start, end) of each sentence in the audio file: expected boundaries from character share,
+    snapped to the nearest real pause, re-estimating the rest after each snap."""
+    total = duration(path)
+    n = len(sentences)
+    if n <= 1:
+        return [(0.0, total)]
+    mids = [(a + b) / 2 for a, b in _silences(path) if 0.2 < (a + b) / 2 < total - 0.2]
+    lens = [max(len(s), 1) for s in sentences]
+    bounds, t_prev = [], 0.0
+    for k in range(n - 1):
+        rest = sum(lens[k:])
+        expect = t_prev + (total - t_prev) * lens[k] / rest
+        cands = [m for m in mids if m > t_prev + 0.4 and abs(m - expect) < max(1.2, 0.25 * (expect - t_prev))]
+        b = min(cands, key=lambda m: abs(m - expect)) if cands else expect
+        bounds.append(b); t_prev = b
+    edges = [0.0] + bounds + [total]
+    return [(edges[i], edges[i + 1]) for i in range(n)]

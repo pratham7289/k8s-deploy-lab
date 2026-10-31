@@ -61,7 +61,8 @@ def _imageinfo(titles: list[str], n: int):
         if not LICENSE_OK.search(lic):
             continue
         artist = re.sub(r"<[^>]+>", "", ii.get("extmetadata", {}).get("Artist", {}).get("value") or "").strip()[:60]
-        out.append(("image", ii.get("thumburl") or ii.get("url"), 5, f"{title[5:]} · {artist} · {lic}"))
+        name = artist or re.sub(r"\.\w+$", "", title[5:])
+        out.append(("image", ii.get("thumburl") or ii.get("url"), 5, f"{name} ({lic}, Wikimedia Commons)"))
         if len(out) >= n:
             break
     return out
@@ -120,30 +121,38 @@ def _stock(q_en: str, kinds=("photos", "videos")):
     return cands
 
 
-def fetch_for_scene(scene: dict, workdir: Path, idx: int):
-    """Return (kind, path, dur, credit) or None."""
+def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: set | None = None):
+    """Return up to `want` visuals [(kind, path, dur, credit)] for one scene, most relevant first.
+    Several shots per scene keep cuts every ~3-4 s instead of one photo held for 15 s."""
+    used = used if used is not None else set()
     named = scene.get("source") == "commons" or bool(scene.get("wiki_title"))
     subject, q_en = scene.get("subject") or "", scene.get("query_en") or scene.get("subject") or ""
     if named:
-        order = [lambda: wikipedia(scene.get("wiki_title") or subject),
-                 lambda: commons(subject),
-                 lambda: _stock(q_en, ("photos", "videos"))]
+        order = [lambda: wikipedia(scene.get("wiki_title") or subject, 4),
+                 lambda: commons(subject, 4),
+                 lambda: _stock(q_en, ("videos", "photos"))]
     else:
         order = [lambda: _stock(q_en, ("videos", "photos")),
-                 lambda: commons(subject)]
-    for get in order:
+                 lambda: commons(subject, 3)]
+    got = []
+    for si, get in enumerate(order):
+        if got and named and si == len(order) - 1:
+            break  # do not pad a named subject with generic stock
         cands = get()
-        if not cands:
-            continue
-        if cands[0][3] == "Pixabay":
+        if cands and cands[0][3] == "Pixabay":
             random.shuffle(cands)
         for kind, url, dur, credit in cands:
+            if url in used:
+                continue
             ext = ".mp4" if kind == "video" else ".jpg"
-            p = workdir / f"s{idx}{ext}"
+            p = workdir / f"s{idx}_{len(got)}{ext}"
             try:
                 visuals.download(url, p)
                 if p.stat().st_size > 20_000:
-                    return (kind, p, dur, credit)
+                    used.add(url)
+                    got.append((kind, p, dur, credit))
             except Exception as e:
                 print(f"[scene {idx}] download failed: {e}")
-    return None
+            if len(got) >= want:
+                return got
+    return got

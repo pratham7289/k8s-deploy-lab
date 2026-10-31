@@ -3,6 +3,8 @@ import json
 import random
 import re
 import shutil
+import subprocess
+import time
 import smtplib
 import sys
 from datetime import datetime, timedelta, timezone
@@ -11,6 +13,9 @@ from pathlib import Path
 
 import os
 from . import config, facebook, render, scenes, score, sources, token, tts, visuals, write
+
+
+MAX_VOICE = 83.0  # LEAD + voice + TAIL + OUTRO must stay under 90 s
 
 
 def posts_last_24h(posted):
@@ -57,46 +62,72 @@ def main():
         pack = write.write(story)
         pack["id"] = story["id"]; pack["title"] = story["title"]; pack["link"] = story.get("link", "")
     else:
-        pack = evergreen_item(posted)
+        pack = write.finish(evergreen_item(posted))
         print(f"[main] evergreen: {pack['id']}")
 
-    # voice
+    # voice: one take, hard length budget (Reels API max is 90 s)
     voice = work / "voice.mp3"
-    if config.MODE == "dry" and not shutil.which("ffprobe"):
-        raise SystemExit("ffmpeg/ffprobe required")
-    try:
-        vlen = tts.synth(pack["script"], voice)
-    except Exception as e:
-        print(f"[main] tts failed: {e}")
-        alert("Nepal Canvas: TTS failed", str(e)); return
+    t0 = time.time()
+    for attempt in range(2):
+        says = [s["say"] for s in pack["sentences"]]
+        try:
+            vlen = tts.synth(pack["script"], voice, says)
+        except Exception as e:
+            print(f"[main] tts failed: {e}")
+            alert("Nepal Canvas: TTS failed", str(e)); return
+        if vlen > MAX_VOICE and vlen <= MAX_VOICE * 1.10:
+            fast = work / "voice_fast.mp3"
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(voice), "-af",
+                            f"atempo={vlen / MAX_VOICE:.3f}", "-b:a", "160k", str(fast)], check=True)
+            fast.replace(voice); vlen = tts.duration(voice)
+            print(f"[main] voice sped up to {vlen:.1f}s")
+        if vlen <= MAX_VOICE:
+            break
+        if attempt == 0 and story:
+            print(f"[main] voice {vlen:.0f}s too long -> shorter rewrite")
+            keep = {k: pack[k] for k in ("id", "title", "link")}
+            pack = write.write(story, shorter=True); pack.update(keep)
+            continue
+        print(f"[main] voice {vlen:.0f}s over budget, not publishing")
+        alert("Nepal Canvas: script too long", f"{pack['headline']} {vlen:.0f}s"); return
+    says = [s["say"] for s in pack["sentences"]]
+    shows = [s["show"] for s in pack["sentences"]]
+    sent_times = tts.sentence_times(voice, says)
 
     # scene plan: what is on screen while each sentence is spoken
     tpl = random.choice(visuals.TEMPLATES)
-    head = visuals.card(pack["headline"], work / "c0.png", tpl, kicker=pack.get("kicker", "आजको खबर"))
-    credit = visuals.card(pack.get("takeaway", ""), work / "c_end.png", tpl, kicker="तपाईंका लागि",
-                          small=f"स्रोत: {pack['source']}")
+    end_card = visuals.card(pack.get("takeaway", ""), work / "c_end.png", tpl, kicker="तपाईंका लागि",
+                            small=f"स्रोत: {pack['source']}")
     try:
         plan = scenes.plan(pack["script"], pack["headline"], pack.get("category", "news")) if config.GEMINI_API_KEY else []
     except Exception as e:
         print(f"[main] scene plan failed: {e}"); plan = []
-    if not plan:  # fallback: whole script as one scene per card
+    if not plan:  # fallback: split sentences evenly over the cards
         cards = pack.get("cards") or [pack["headline"]]
-        sents = [t for t in re.split(r"(?<=[।!?])\s+", pack["script"]) if t.strip()]
-        k = max(len(sents) // max(len(cards), 1), 1)
-        plan = [{"text": " ".join(sents[i*k:(i+1)*k]) or c, "card": c, "subject": "", "query_en": kw, "source": "stock"}
+        k = max(len(says) // max(len(cards), 1), 1)
+        plan = [{"text": " ".join(says[i*k:(i+1)*k]) or c, "card": c, "subject": "", "query_en": kw, "source": "stock"}
                 for i, (c, kw) in enumerate(zip(cards, (pack.get("keywords") or ["Nepal"]) * 4))]
-    hits = 0
+    used, shots = set(), 0
     for i, sc in enumerate(plan):
-        sc["visual"] = scenes.fetch_for_scene(sc, work, i)
-        hits += bool(sc["visual"])
-    print(f"[main] scenes={len(plan)} visuals={hits}")
+        est = len(sc.get("text", "")) / 14  # ~14 Devanagari chars per second of speech
+        sc["visuals"] = scenes.fetch_for_scene(sc, work, i, want=max(1, min(3, round(est / 4))), used=used)
+        shots += len(sc["visuals"])
+    print(f"[main] scenes={len(plan)} visuals={shots} ({time.time() - t0:.0f}s so far)")
 
     out = work / "reel.mp4"
-    render.build(voice, vlen, head, credit, plan, work, out, tpl)
+    t1 = time.time()
+    render.build(voice, vlen, says, shows, sent_times, pack["headline"], pack.get("kicker", ""), end_card,
+                 plan, work, out, tpl)
+    total = tts.duration(out)
+    print(f"[main] rendered {out} total={total:.1f}s voice={vlen:.1f}s render={time.time() - t1:.0f}s")
+    credits = [c for c in (work / "credits.txt").read_text(encoding="utf-8").splitlines() if c.strip()]
+    photo_line = ("\nतस्बिर: " + "; ".join(credits[:5])) if credits else ""
     caption = f"{pack.get('caption_ne', pack['headline'])}\n{pack.get('caption_en', '')}\n" \
-              f"स्रोत: {pack['source']}\n{' '.join(pack['hashtags'])}"
+              f"स्रोत: {pack['source']}{photo_line}\n{' '.join(pack['hashtags'])}"
     (work / "caption.txt").write_text(caption, encoding="utf-8")
-    print(f"[main] rendered {out} ({vlen:.0f}s voice)")
+    print("[main] caption:\n" + caption)
+    if total > 89.5:
+        print("[main] video over 90 s, not publishing"); alert("Nepal Canvas: video too long", str(total)); return
 
     if config.MODE == "dry":
         return

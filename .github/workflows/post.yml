@@ -1,8 +1,10 @@
 name: post-reel
 on:
   schedule:
-    # 07:00 10:00 13:00 16:00 18:00 Nepal time (UTC+5:45) -> 01:15 04:15 07:15 10:15 12:15 UTC
-    - cron: "15 1,4,7,10,12 * * *"
+    # 3 a day: 07:15, 12:45, 19:15 Nepal time (UTC+5:45) -> 01:30, 07:00, 13:30 UTC
+    - cron: "30 1 * * *"
+    - cron: "0 7 * * *"
+    - cron: "30 13 * * *"
   workflow_dispatch:
     inputs:
       slot:
@@ -48,7 +50,9 @@ jobs:
         run: |
           git config user.name "nepal-canvas-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add posted.json token.json 2>/dev/null || git add posted.json
+          git add posted.json
+          [ -f token.enc ] && git add token.enc
+          git rm -q --cached --ignore-unmatch token.json
           git diff --cached --quiet || (git commit -m "post: $(date -u +%FT%TZ)" && git push)
       - uses: actions/upload-artifact@v4
         if: always()
