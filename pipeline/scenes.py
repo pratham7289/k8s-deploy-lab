@@ -29,6 +29,8 @@ def plan(script: str, headline: str, category: str) -> list[dict]:
     res = llm.ask_json(config.prompt("scenes"),
                        json.dumps({"headline": headline, "category": category, "script": script}, ensure_ascii=False),
                        temperature=0.3)
+    if isinstance(res, list):
+        res = {"scenes": res}
     out = []
     for s in res.get("scenes", [])[:7]:
         if not s.get("text"):
