@@ -31,8 +31,8 @@ GAP = 0.32                 # seconds of silence between chunks
 
 
 DRIFT_LIMIT = 0.35  # sentence-level estimate is noisy; only catch a clear slow-down
-RATE_OK = (9.5, 15.0)  # weighted chars per second; outside this a take is rushed, dragged or cut short
-TARGET_CPS = 12.0      # every Reel is levelled to this pace so all videos sound the same
+RATE_OK = (6.5, 11.0)  # weighted chars per second; outside this a take is rushed, dragged or cut short
+TARGET_CPS = 8.2       # every Reel is levelled to this pace so all videos sound the same
 
 
 def _weight(s: str) -> int:
