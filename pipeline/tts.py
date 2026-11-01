@@ -19,12 +19,11 @@ import requests
 
 from . import config
 
-GEMINI_TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gemini-2.5-flash-preview-tts"]
+# Flash TTS + style metadata won the owner's blind test (1 Nov 2026); lite is the quota fallback.
+GEMINI_TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
 VOICE = "Aoede"  # locked: one anchor voice for the Page
-STYLE = ("Read this as a calm, confident Nepali television news anchor speaking to viewers. "
-         "Natural Nepali pronunciation, clear diction, a steady medium pace that stays exactly the same "
-         "from the first word to the last, short pauses at sentence ends, slight emphasis on key facts, "
-         "no dramatic or robotic tone, do not slow down or trail off at the end.")
+# Sent as speech_metadata.style, NEVER inside the text (3.8 TTS reads the text field verbatim).
+STYLE = "Calm, confident Nepali television news anchor; steady medium pace; clear diction; warm but neutral."
 CHUNK_CHARS = 260          # ~2-3 Nepali sentences per TTS call
 RATE_TOLERANCE = 0.10      # chunks faster/slower than median by more than this get time-stretched
 GAP = 0.32                 # seconds of silence between chunks
@@ -60,7 +59,7 @@ def chunks(text: str) -> list[str]:
 def _gemini_call(text: str, voice: str, wav: Path) -> str | None:
     """One TTS request -> wav file. Returns the model used, or None."""
     body = {
-        "contents": [{"parts": [{"text": text}]}],  # text only: the model read any style instruction aloud
+        "contents": [{"parts": [{"text": text, "speech_metadata": {"style": STYLE}}]}],
         "generationConfig": {"responseModalities": ["AUDIO"],
                              "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}},
     }
@@ -70,6 +69,8 @@ def _gemini_call(text: str, voice: str, wav: Path) -> str | None:
                 r = requests.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={config.GEMINI_API_KEY}",
                     json=body, timeout=180)
+                if r.status_code == 400 and "speech_metadata" in r.text:
+                    body["contents"][0]["parts"][0].pop("speech_metadata", None); continue
                 if r.status_code == 429:
                     time.sleep(40 * (attempt + 1)); continue
                 if r.status_code >= 400:
