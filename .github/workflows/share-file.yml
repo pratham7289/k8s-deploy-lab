@@ -1,0 +1,34 @@
+name: share-file
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "run id that produced the artifact"
+        required: true
+      pattern:
+        description: "artifact name pattern"
+        default: "voice-test-*"
+      file:
+        description: "file inside the artifact"
+        default: "voice_test.mp4"
+permissions:
+  contents: write
+  actions: read
+jobs:
+  share:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: ${{ github.event.inputs.pattern }}
+          path: dl
+          merge-multiple: true
+      - name: Publish as a private pre-release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          f=$(find dl -name "${{ github.event.inputs.file }}" | head -1)
+          ls -la "$f"
+          gh release create "share-${{ github.run_id }}" "$f" --repo "${{ github.repository }}" --prerelease --title "share ${{ github.run_id }}" --notes "temporary file share"
