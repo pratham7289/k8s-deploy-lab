@@ -1,14 +1,20 @@
 name: post-reel
 on:
   schedule:
-    # 3 a day: 07:15, 12:45, 19:15 Nepal time (UTC+5:45) -> 01:30, 07:00, 13:30 UTC
-    - cron: "30 1 * * *"
-    - cron: "0 7 * * *"
-    - cron: "30 13 * * *"
+    # Posts go live at exactly 07:00, 13:00 and 16:00 Nepal time via Facebook scheduled publishing.
+    # Each slot gets three prepare attempts (~2h40, 1h40, 0h40 before); attempts after the first
+    # success exit in seconds. Nepal = UTC+5:45:
+    #   07:00 slot -> 04:20 05:20 06:20 NPT = 22:35 23:35 00:35 UTC
+    #   13:00 slot -> 10:20 11:20 12:20 NPT = 04:35 05:35 06:35 UTC
+    #   16:00 slot -> 13:20 14:20 15:20 NPT = 07:35 08:35 09:35 UTC
+    - cron: "35 22,23,0,4,5,6,7,8,9 * * *"
   workflow_dispatch:
     inputs:
+      when:
+        description: "now = make and post one immediately | slot = prepare the next 07/13/16 slot"
+        default: "now"
       slot:
-        description: "morning | politics | breaking | publicinfo | evening"
+        description: "story type for 'now': morning | politics | breaking | publicinfo | evening"
         required: false
       mode:
         description: "publish | draft | dry"
@@ -19,20 +25,35 @@ concurrency: post-reel
 jobs:
   reel:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Which slot is due?
+        id: gate
+        if: github.event_name == 'schedule' || github.event.inputs.when == 'slot'
+        run: python3 -m pipeline.schedule
+      - name: Decide
+        id: go
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.when }}" != "slot" ]; then echo "run=yes" >> "$GITHUB_OUTPUT";
+          elif [ "${{ steps.gate.outputs.due }}" = "yes" ]; then echo "run=yes" >> "$GITHUB_OUTPUT";
+          else echo "run=no" >> "$GITHUB_OUTPUT"; echo "nothing due"; fi
       - uses: actions/setup-python@v5
+        if: steps.go.outputs.run == 'yes'
         with:
           python-version: "3.12"
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 >/dev/null
+        if: steps.go.outputs.run == 'yes'
       - run: pip install -q -r requirements.txt
+        if: steps.go.outputs.run == 'yes'
       - name: Fetch fonts (OFL) if missing
+        if: steps.go.outputs.run == 'yes'
         run: |
           mkdir -p assets/fonts
           [ -f assets/fonts/NotoSansDevanagari.ttf ] || curl -sSL -o assets/fonts/NotoSansDevanagari.ttf "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
           [ -f assets/fonts/NotoSans.ttf ] || curl -sSL -o assets/fonts/NotoSans.ttf "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"
       - name: Run pipeline
+        if: steps.go.outputs.run == 'yes'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -44,18 +65,25 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SLOT: ${{ github.event.inputs.slot }}
+          SLOT_KEY: ${{ steps.gate.outputs.key }}
+          SLOT_TIME: ${{ steps.gate.outputs.time }}
+          SLOT_KIND: ${{ steps.gate.outputs.kind }}
           MODE: ${{ github.event.inputs.mode || 'publish' }}
         run: python -m pipeline.main
       - name: Save state
+        if: steps.go.outputs.run == 'yes'
         run: |
           git config user.name "nepal-canvas-bot"
           git config user.email "bot@users.noreply.github.com"
           git add posted.json
           [ -f token.enc ] && git add token.enc
           git rm -q --cached --ignore-unmatch token.json
-          git diff --cached --quiet || (git commit -m "post: $(date -u +%FT%TZ)" && git push)
+          git diff --cached --quiet && exit 0
+          git commit -m "post: $(date -u +%FT%TZ)"
+          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
+          exit 1
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.go.outputs.run == 'yes'
         with:
           name: reel-${{ github.run_id }}
           path: |

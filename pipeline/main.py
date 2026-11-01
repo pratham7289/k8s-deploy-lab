@@ -12,7 +12,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import os
-from . import config, facebook, render, scenes, score, sources, token, tts, visuals, write
+from . import config, facebook, render, scenes, schedule, score, sources, token, tts, visuals, write
 
 
 MAX_VOICE = 83.0  # LEAD + voice + TAIL + OUTRO must stay under 90 s
@@ -48,9 +48,13 @@ def alert(subject, body):
 
 def main():
     config.FB_PAGE_TOKEN = token.refresh_if_needed(os.getenv('FB_APP_ID', ''), os.getenv('FB_APP_SECRET', ''))
-    slot = config.slot_for_now()
+    slot = os.getenv("SLOT_KIND") or config.slot_for_now()
+    slot_key, slot_time = os.getenv("SLOT_KEY", ""), os.getenv("SLOT_TIME", "")
     posted = sources.load_posted()
-    print(f"[main] slot={slot} mode={config.MODE} posted24h={posts_last_24h(posted)}")
+    print(f"[main] slot={slot} key={slot_key or 'manual'} for={slot_time or 'now'} mode={config.MODE} "
+          f"posted24h={posts_last_24h(posted)}")
+    if slot_key and any(p.get("slot_key") == slot_key for p in posted):
+        print("[main] slot already done"); return
     if config.MODE != "dry" and posts_last_24h(posted) >= config.MAX_POSTS_24H:
         print("[main] 24h cap reached, skipping"); return
 
@@ -132,13 +136,23 @@ def main():
     if config.MODE == "dry":
         return
     try:
-        vid = facebook.publish_reel(out, caption, "DRAFT" if config.MODE == "draft" else "PUBLISHED")
+        state, at = ("DRAFT" if config.MODE == "draft" else "PUBLISHED"), None
+        if state == "PUBLISHED" and slot_time:
+            at = datetime.fromisoformat(slot_time)
+            if (at - datetime.now(timezone.utc)).total_seconds() >= schedule.MIN_LEAD * 60:
+                state = "SCHEDULED"
+            else:
+                at = None
+        vid = facebook.publish_reel(out, caption, state, int(at.timestamp()) if at else None)
+        print(f"[main] {state.lower()} video {vid}" + (f" for {at.isoformat()}" if at else ""))
     except Exception as e:
         print(f"[main] publish failed: {e}")
         alert("Nepal Canvas: publish failed", f"{pack['headline']}\n{e}")
         return  # exit 0 on purpose
     posted.append({"id": pack["id"], "title": pack.get("title", pack["headline"]), "fb_video_id": vid,
-                   "slot": slot, "published_at": datetime.now(timezone.utc).isoformat()})
+                   "slot": slot, "slot_key": (slot_key or None) if state != "DRAFT" else None, "state": state,
+                   "scheduled_for": at.isoformat() if at else None,
+                   "published_at": (at or datetime.now(timezone.utc)).isoformat()})
     config.POSTED.write_text(json.dumps(posted[-500:], ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[main] published video {vid}")
 
