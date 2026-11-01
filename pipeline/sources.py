@@ -45,7 +45,8 @@ SITES = [
     ("The Indian Express", "https://indianexpress.com", "india", ["https://indianexpress.com/feed/"]),
 ]
 FEEDS = [(n, urls[0], c) for n, _, c, urls in SITES]  # kept for older callers
-UA = {"User-Agent": "Mozilla/5.0 (compatible; NepalCanvasBot/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+      "Accept": "application/rss+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.5"}
 TAG = re.compile(r"<[^>]+>")
 RAW_DATES = []   # unparsed date strings, shown by the health check
 ERRORS = {}      # site -> last error, shown by the health check
@@ -109,7 +110,36 @@ def _discover(home):
     return out
 
 
+def _dated(items):
+    return [i for i in items if not i["published"].startswith("2000-")]
+
+
+def _google_news(name, home, category):
+    """Fallback for sites that block bots or publish undated feeds: Google News search for that domain."""
+    from urllib.parse import quote, urlparse
+    domain = urlparse(home).netloc.replace("www.", "")
+    url = f"https://news.google.com/rss/search?q={quote('site:' + domain + ' when:1d')}&hl=ne&gl=NP&ceid=NP:ne"
+    try:
+        items = _items(name, category, _parse(url), url)
+        for i in items:  # Google appends " - Outlet" to titles
+            i["title"] = re.sub(r"\s+-\s+[^-]+$", "", i["title"])
+        return _dated(items)
+    except Exception as e:
+        ERRORS[name + " (google news)"] = str(e)[:80]
+        return []
+
+
 def fetch_site(name, home, category, urls):
+    got = _fetch_direct(name, home, category, urls)
+    if _dated(got) or "google.com" in home:
+        return got
+    alt = _google_news(name, home, category)
+    if alt:
+        print(f"[sources] {name}: via Google News ({len(alt)})")
+    return alt
+
+
+def _fetch_direct(name, home, category, urls):
     tried = []
     for url in list(urls) + ["__discover__"]:
         if url == "__discover__":
