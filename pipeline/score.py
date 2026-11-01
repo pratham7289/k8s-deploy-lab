@@ -8,10 +8,12 @@ def pick(cands, slot: str):
     if not cands:
         return None
     prefer = config.SLOTS[slot]["prefer"]
-    # keep the prompt small: top 25 by coverage, then recency
-    cands = sorted(cands, key=lambda s: (-s.get("coverage", 0), s["published"]), reverse=False)[:25]
+    # keep the prompt small: the 35 newest, most-covered stories (Indian outlets capped at 8)
+    nepal = [s for s in cands if s["category"] != "india"]
+    india = [s for s in cands if s["category"] == "india"][:8]
+    cands = sorted(nepal[:60] + india, key=lambda s: (s.get("age_h", 99) > 12, -s.get("coverage", 0), s.get("age_h", 99)))[:35]
     rows = [{"i": i, "source": s["source"], "category": s["category"], "title": s["title"],
-             "snippet": s["text"][:300], "coverage": s.get("coverage", 0),
+             "snippet": s["text"][:300], "coverage": s.get("coverage", 0), "age_h": s.get("age_h"),
              "traffic": s.get("traffic", "")} for i, s in enumerate(cands)]
     res = llm.ask_json(
         config.prompt("score"),

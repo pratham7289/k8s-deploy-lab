@@ -15,7 +15,7 @@ NPT = timezone(timedelta(hours=5, minutes=45))
 MODE = os.getenv("MODE", "publish")  # publish | draft | dry
 MIN_SCORE = int(os.getenv("MIN_SCORE", "60"))
 MAX_POSTS_24H = int(os.getenv("MAX_POSTS_24H", "25"))  # Meta cap is 30
-MAX_AGE_HOURS = 36
+MAX_AGE_HOURS = 12  # newest first; widened to 24/36 h only if fewer than 15 Nepal stories
 RECENT_DAYS = 7
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

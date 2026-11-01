@@ -44,7 +44,11 @@ def _words(res: dict) -> int:
 
 def write(story: dict, shorter: bool = False) -> dict:
     article = fetch_article(story["link"]) if story.get("link") else ""
+    from datetime import datetime
+    pub = story.get("published", "")
     payload = {"source": story["source"], "title": story["title"], "category": story["category"],
+               "today_nepal": datetime.now(config.NPT).strftime("%Y-%m-%d %A"),
+               "published_nepal": datetime.fromisoformat(pub).astimezone(config.NPT).strftime("%Y-%m-%d %H:%M") if pub else "",
                "rss_text": story["text"], "article_text": article or story["text"]}
     if shorter:
         payload["instruction"] = "Keep it to 80-95 words in total. Same facts only."

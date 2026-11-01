@@ -21,7 +21,7 @@ from . import config
 
 # Flash TTS + style metadata won the owner's blind test (1 Nov 2026); lite is the quota fallback.
 GEMINI_TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
-VOICE = "Aoede"  # locked: one anchor voice for the Page
+VOICE = "Sulafat"  # owner's pick (voice F in the 1 Nov blind test)
 # Sent as speech_metadata.style, NEVER inside the text (3.8 TTS reads the text field verbatim).
 STYLE = "Calm, confident Nepali television news anchor; steady medium pace; clear diction; warm but neutral."
 CHUNK_CHARS = 260          # ~2-3 Nepali sentences per TTS call
