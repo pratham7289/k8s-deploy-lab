@@ -1,0 +1,46 @@
+name: voice-test
+on:
+  workflow_dispatch:
+    inputs:
+      engines:
+        description: "comma list: gemini,kala,piper,edge,parler"
+        default: "gemini,kala,piper,edge,parler"
+jobs:
+  voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 espeak-ng >/dev/null
+      - name: Install engines (each optional)
+        run: |
+          pip install -q -r requirements.txt huggingface_hub soundfile
+          pip install -q kala-tts || echo "kala-tts install failed"
+          pip install -q piper-tts || echo "piper install failed"
+          pip install -q --index-url https://download.pytorch.org/whl/cpu torch || echo "torch failed"
+          pip install -q git+https://github.com/huggingface/parler-tts.git || echo "parler install failed"
+      - name: Fetch fonts
+        run: |
+          mkdir -p assets/fonts
+          [ -f assets/fonts/NotoSans.ttf ] || curl -sSL -o assets/fonts/NotoSans.ttf "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"
+      - name: Make samples
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+          ENGINES: ${{ github.event.inputs.engines }}
+          POST_DRAFT: "1"
+        run: python scripts/voice_test.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: voice-test-${{ github.run_id }}
+          path: |
+            out/voicetest/*.wav
+            out/voicetest/voice_test.mp4
+            out/voicetest/key.txt
+          retention-days: 14
