@@ -60,7 +60,7 @@ def chunks(text: str) -> list[str]:
 def _gemini_call(text: str, voice: str, wav: Path) -> str | None:
     """One TTS request -> wav file. Returns the model used, or None."""
     body = {
-        "contents": [{"parts": [{"text": f"{STYLE}\n\n{text}"}]}],
+        "contents": [{"parts": [{"text": text}]}],  # text only: the model read any style instruction aloud
         "generationConfig": {"responseModalities": ["AUDIO"],
                              "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}},
     }
