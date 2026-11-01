@@ -172,6 +172,8 @@ print(json.dumps({"voices": len(segs)}))
 
 # ---- post the blind test as a Facebook DRAFT so it can be heard on the phone ----
 if os.getenv("POST_DRAFT") == "1":
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from pipeline import config, facebook, token
     config.FB_PAGE_TOKEN = token.current()
     vid = facebook.publish_reel(OUT / "voice_test.mp4", "Voice test (draft, not for publishing)", "DRAFT")
