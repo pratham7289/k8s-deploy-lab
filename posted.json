@@ -88,5 +88,15 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-01T13:00:00+05:45",
   "published_at": "2026-11-01T13:00:00+05:45"
+ },
+ {
+  "id": "063c434800e7",
+  "title": "२८ भन्सार विन्दुबाट हुन्छ वैदेशिक व्यापार, वीरगञ्ज एक्लैलाई आधा भार",
+  "fb_video_id": "1477440450918795",
+  "slot": "publicinfo",
+  "slot_key": "2026-11-01-1600",
+  "state": "PUBLISHED",
+  "scheduled_for": null,
+  "published_at": "2026-11-01T10:13:32.964856+00:00"
  }
 ]
