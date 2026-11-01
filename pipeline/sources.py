@@ -47,6 +47,8 @@ SITES = [
 FEEDS = [(n, urls[0], c) for n, _, c, urls in SITES]  # kept for older callers
 UA = {"User-Agent": "Mozilla/5.0 (compatible; NepalCanvasBot/1.0)"}
 TAG = re.compile(r"<[^>]+>")
+RAW_DATES = []   # unparsed date strings, shown by the health check
+ERRORS = {}      # site -> last error, shown by the health check
 
 
 def _text(el, *names):
@@ -63,10 +65,17 @@ def _when(el):
     try:
         return parsedate_to_datetime(raw).astimezone(timezone.utc)
     except Exception:
-        try:
-            return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
-        except Exception:
-            return None  # undated: treated as too old
+        pass
+    try:
+        d = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return (d if d.tzinfo else d.replace(tzinfo=config.NPT)).astimezone(timezone.utc)
+    except Exception:
+        pass
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})", raw)
+    if m:  # bare local timestamp, Nepal sites publish in NPT
+        return datetime(*map(int, m.groups()), tzinfo=config.NPT).astimezone(timezone.utc)
+    RAW_DATES.append(raw[:60])
+    return None  # undated: treated as too old
 
 
 def _story_id(title: str) -> str:
@@ -117,8 +126,8 @@ def fetch_site(name, home, category, urls):
         tried.append(url)
         try:
             return _items(name, category, _parse(url), url)
-        except Exception:
-            pass
+        except Exception as e:
+            ERRORS[name] = f"{url[:60]} -> {str(e)[:80]}"
     print(f"[sources] {name}: no working feed ({len(tried)} tried)")
     return []
 
@@ -225,3 +234,7 @@ if __name__ == "__main__":  # feed health check
         newest = min(((now - d).total_seconds() / 3600 for d in dated), default=None)
         print(f"FEED {name:22s} items={len(items):3d} newest={'-' if newest is None else f'{newest:.1f}h'}"
               f" url={items[0]['feed'] if items else '-'}")
+    for name, err in ERRORS.items():
+        print(f"ERR  {name}: {err}")
+    for raw in dict.fromkeys(RAW_DATES):
+        print(f"DATE unparsed: {raw!r}")
