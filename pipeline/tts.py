@@ -30,7 +30,7 @@ GAP = 0.32                 # seconds of silence between chunks
 
 
 DRIFT_LIMIT = 0.35  # sentence-level estimate is noisy; only catch a clear slow-down
-RATE_OK = (6.5, 11.0)  # weighted chars per second; outside this a take is rushed, dragged or cut short
+RATE_OK = (6.5, 15.5)  # weighted chars/s; Flash TTS reads ~13, lite ~8; >15.5 means a cut-short take
 TARGET_CPS = 8.2       # every Reel is levelled to this pace so all videos sound the same
 
 
@@ -118,7 +118,7 @@ def _gemini_chunked(text: str, path: Path) -> bool:
     for ch, wav in wavs:
         d = duration(wav)
         rates.append(_weight(ch) / max(d, 0.1))
-    med = TARGET_CPS
+    med = statistics.median(rates)  # level chunks to each other, never slow a whole take down
     levelled = []
     for (ch, wav), rate in zip(wavs, rates):
         factor = med / rate  # >1 means this chunk is slow -> speed up
