@@ -15,9 +15,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 NPT = timezone(timedelta(hours=5, minutes=45))
-SLOTS = [(7, 0, "morning"), (10, 0, "politics"), (13, 0, "breaking"), (16, 0, "publicinfo"), (19, 0, "evening")]  # 5 a day, 3 h apart
+SLOTS = [(7, 0, "morning"), (9, 0, "politics"), (11, 0, "breaking"), (13, 0, "breaking"),
+         (15, 0, "publicinfo"), (17, 0, "politics"), (20, 0, "evening")]  # 7 a day
 AHEAD_MAX = 110   # prepare a slot at most ~1 h 50 m before it, so the news is fresh
-LATE_MAX = 90     # still post a missed slot up to 1.5 h late (next slot is 3 h later)
+LATE_MAX = 60     # still post a missed slot up to 1 h late (next slot is 2 h later)
 MIN_LEAD = 15     # Facebook needs the scheduled time >= 10 min ahead; below this publish immediately
 POSTED = Path(__file__).resolve().parent.parent / "posted.json"
 

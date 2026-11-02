@@ -5,6 +5,7 @@ For each scene return:
 - "subject": the single most specific visual subject for these sentences, in English. Prefer NAMED things the text names or clearly implies: a place ("Singha Durbar", "Tribhuvan International Airport", "Pokhara Phewa Lake"), an institution ("Supreme Court of Nepal", "Nepal Rastra Bank", "Nepal Electricity Authority"), an event or object ("Melamchi water supply", "Kathmandu Ring Road traffic", "Nepal Police vehicle"), a district or city, a river, a crop, a disease vector ("Aedes mosquito"), a product.
 - "wiki_title": the exact English Wikipedia article title for that subject if one very likely exists (e.g. "Singha Durbar", "Supreme Court of Nepal", "Tribhuvan International Airport", "Nepal Rastra Bank", "Dengue fever", "Kathmandu", "Melamchi Water Supply Project", "Federal Parliament of Nepal", "Nepal Electricity Authority"). Empty string if the sentences are abstract (advice, what it means for you) and no article fits.
 - "query_en": 2-4 plain English words for a generic stock-footage search of the same idea (used only if no article photo exists): e.g. "parliament building", "police vehicle street", "mosquito closeup", "hospital corridor", "rain street umbrella".
+- "video_query": 2-4 English words for REAL MOVING stock footage that fits these sentences, Nepal-specific when possible: "Kathmandu street traffic", "Nepal flag waving", "Himalaya mountains aerial", "crowd protest street", "judge gavel court", "hospital ward", "flood river rain", "farmer rice field", "money counting cash", "airport airplane takeoff". Always fill it.
 - "source": "commons" when wiki_title is set or the subject is a named Nepali place/institution/event; otherwise "stock".
 - "map": ONLY when these sentences say where something happened in a specific Nepali DISTRICT, the district's English name as on Wikipedia ("Sindhupalchok", "Kaski", "Jhapa"); else "". Use it in at most 2 scenes.
 - "map_ne": that district's Nepali name ("सिन्धुपाल्चोक"), else "".
@@ -13,4 +14,4 @@ For each scene return:
 
 Rules: never choose images of identifiable private individuals, victims, injuries, or children. For politicians use their office/building ("Office of the Prime Minister and Council of Ministers", wiki_title "Singha Durbar"), not their face. For a ministry, use the ministry's building or Singha Durbar. For weather use the place affected. For prices use the product or the market.
 
-Return ONLY JSON: {"scenes":[{"text":"...","subject":"...","wiki_title":"...","query_en":"...","source":"commons","card":"...","map":"","map_ne":"","number":null}]}
+Return ONLY JSON: {"scenes":[{"text":"...","subject":"...","wiki_title":"...","query_en":"...","source":"commons","card":"...","video_query":"...","map":"","map_ne":"","number":null}]}

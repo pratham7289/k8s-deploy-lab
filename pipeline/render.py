@@ -20,7 +20,8 @@ MUSIC_DB = -25        # bed level under the voice
 LEAD = 0.25           # voice starts this long after frame 0
 TAIL = 0.35           # breath after the last word before the end card
 OUTRO = 2.6           # takeaway / source card
-HOOK_SECS = 3.2       # headline over the first shot
+HOOK_SECS = 3.2       # headline over the first shot (after the punch)
+PUNCH_SECS = 1.5      # giant key fact at second 0
 MAX_SHOT = 4.5
 
 
@@ -85,6 +86,32 @@ def _sub_png(text: str, path: Path, hi: int = -1):
                 x += ww + sp
             y += 84
     im.save(path, compress_level=1)
+    return path
+
+
+def _punch_png(text: str, path: Path):
+    """Second 0: the single most striking fact, huge, yellow on a dark band, centred in the upper half."""
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    _brand(im)
+    if text:
+        d = ImageDraw.Draw(im)
+        size = 150
+        f = visuals._font(size)
+        while d.textlength(text, font=f) > W - 140 and size > 80:
+            size -= 10; f = visuals._font(size)
+        lines = visuals._wrap(d, text, f, W - 140)[:2]
+        lh = int(size * 1.3)
+        bh = lh * len(lines) + 90
+        y0 = 560 - bh // 2
+        d.rectangle([0, y0, W, y0 + bh], fill=(8, 12, 24, 215))
+        d.rectangle([0, y0, W, y0 + 12], fill=(220, 20, 60, 255))
+        y = y0 + 45
+        for ln in lines:
+            lw = d.textlength(ln, font=f)
+            d.text(((W - lw) / 2 + 5, y + 5), ln, font=f, fill=(0, 0, 0, 200))
+            d.text(((W - lw) / 2, y), ln, font=f, fill=(255, 210, 0, 255))
+            y += lh
+    im.save(path)
     return path
 
 
@@ -185,9 +212,10 @@ def _shot_still(img: Path, dur: float, out: Path, move: str, scale: float = 1.14
     return out
 
 
-def _shot_video(src: Path, dur: float, out: Path):
+def _shot_video(src: Path, dur: float, out: Path, start: float = 0.0):
     vf = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},format=yuv420p"
-    _run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(src), "-t", f"{dur:.3f}",
+    _run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-ss", f"{start:.2f}", "-i", str(src),
+          "-t", f"{dur:.3f}",
           "-vf", vf] + _enc() + [str(out)])
     return out
 
@@ -230,7 +258,7 @@ def _scene_spans(scenes, sent_times, sentences, body_end):
 
 def build(voice: Path, voice_len: float, sentences: list[str], shows: list[str],
           sent_times: list[tuple[float, float]], headline: str, kicker: str, end_card: Path,
-          scenes: list[dict], workdir: Path, out: Path, template: str) -> Path:
+          scenes: list[dict], workdir: Path, out: Path, template: str, punch: str = "") -> Path:
     """scenes: [{text, card, visuals: [(kind, path, dur, credit)]}] in order."""
     body_end = LEAD + voice_len + TAIL
     spans = _scene_spans(scenes, sent_times, sentences, body_end)
@@ -250,7 +278,7 @@ def build(voice: Path, voice_len: float, sentences: list[str], shows: list[str],
             sd = dur / n
             seg = workdir / f"shot{i:02d}_{j}.mp4"
             if kind == "video":
-                _shot_video(p, sd, seg)
+                _shot_video(p, sd, seg, start=(j // len(vis)) * sd)
             elif kind == "card":
                 _shot_still(p, sd, seg, "down" if j % 2 else "up", scale=1.04)
             else:  # alternate framing on reuse so a repeated photo reads as a new shot
@@ -268,19 +296,24 @@ def build(voice: Path, voice_len: float, sentences: list[str], shows: list[str],
     cues = [(LEAD + a, LEAD + b, txt) for (a, b), txt in zip(sent_times, shows)]
     subs = _subtitle_track(cues, total, workdir)
     hook = _hook_png(headline, kicker, workdir / "hook.png")
+    p0 = PUNCH_SECS if punch else 0.0
+    pun = _punch_png(punch, workdir / "punch.png")
     bed = _bed(workdir, total)
     fc = (f"[1:v]format=rgba[s];[0:v][s]overlay=0:0:eof_action=pass[v1];"
-          f"[2:v]format=rgba,fade=t=out:st={HOOK_SECS - 0.4:.2f}:d=0.4:alpha=1[h];"
-          f"[v1][h]overlay=0:0:eof_action=pass[v2];"
+          f"[2:v]format=rgba,fade=t=in:st={p0:.2f}:d=0.2:alpha=1,fade=t=out:st={p0 + HOOK_SECS - 0.4:.2f}:d=0.4:alpha=1[h];"
+          f"[6:v]format=rgba,fade=t=out:st={max(p0 - 0.2, 0):.2f}:d=0.2:alpha=1[pu];"
+          f"[v1][h]overlay=0:0:eof_action=pass:enable='gte(t,{p0:.2f})'[v1b];"
+          f"[v1b][pu]overlay=0:0:eof_action=pass:enable='lt(t,{max(p0, 0.04):.2f})'[v2];"
           f"[v2][5:v]overlay=x='-w+w*t/{total:.3f}':y=0:eof_action=pass,format=yuv420p[v];"
           f"[3:a]adelay={int(LEAD * 1000)}|{int(LEAD * 1000)},apad[vo];"
           f"[4:a]volume={MUSIC_DB}dB,afade=t=in:d=1.0,afade=t=out:st={total - 2.0:.2f}:d=2.0[m];"
           f"[vo][m]amix=inputs=2:duration=first:normalize=0[a]")
     _run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent),
           "-f", "concat", "-safe", "0", "-i", str(subs),
-          "-loop", "1", "-framerate", str(FPS), "-t", f"{HOOK_SECS:.2f}", "-i", str(hook),
+          "-loop", "1", "-framerate", str(FPS), "-t", f"{p0 + HOOK_SECS:.2f}", "-i", str(hook),
           "-i", str(voice), "-stream_loop", "-1", "-i", str(bed),
           "-f", "lavfi", "-i", f"color=c=0xDC143C:s={W}x10:r={FPS}:d={total:.3f}",
+          "-loop", "1", "-framerate", str(FPS), "-t", f"{max(p0, 0.1):.2f}", "-i", str(pun),
           "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
           "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS),
           "-g", str(FPS * 2), "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "160k",

@@ -6,7 +6,8 @@ import requests
 
 from . import config, llm, sources
 
-MIN_WORDS, MAX_WORDS = 85, 120
+MIN_WORDS, MAX_WORDS = 60, 100
+TARGET = 80
 DIGIT_OR_LATIN = re.compile(r"[0-9०-९A-Za-z]")
 
 
@@ -49,23 +50,27 @@ def write(story: dict, shorter: bool = False) -> dict:
     payload = {"source": story["source"], "title": story["title"], "category": story["category"],
                "today_nepal": datetime.now(config.NPT).strftime("%Y-%m-%d %A"),
                "published_nepal": datetime.fromisoformat(pub).astimezone(config.NPT).strftime("%Y-%m-%d %H:%M") if pub else "",
-               "rss_text": story["text"], "article_text": article or story["text"]}
+               "rss_text": story["text"], "article_text": article or story["text"],
+               "trending_hashtags": [t for t in sources.TREND_CONTEXT.get("x_trends_nepal", []) if t.startswith("#")][:15]}
     if shorter:
-        payload["instruction"] = "Keep it to 80-95 words in total. Same facts only."
+        payload["instruction"] = "Keep it to 65-75 words in total. Same facts only."
     res = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
     w = _words(res)
     if not MIN_WORDS <= w <= MAX_WORDS:  # one rewrite pass towards the target length
         payload["previous_sentences"] = res.get("sentences", [])
-        payload["instruction"] = (f"The previous version had {w} words. Rewrite it to 95-115 words in total, "
+        payload["instruction"] = (f"The previous version had {w} words. Rewrite it to 70-90 words in total, "
                                   "same facts only, hook first, same JSON format.")
         res2 = finish(llm.ask_json(config.prompt("write"), json.dumps(payload, ensure_ascii=False), temperature=0.5))
-        if abs(_words(res2) - 105) < abs(w - 105):
+        if abs(_words(res2) - TARGET) < abs(w - TARGET):
             res = res2
     # hard rules regardless of what the model returned
     for s in res["sentences"]:
         if DIGIT_OR_LATIN.search(s["say"]):
             print(f"[write] digits/latin left in spoken text: {s['say'][:60]}")
-    res["hashtags"] = (config.BASE_HASHTAGS + [h for h in res.get("hashtags", []) if h.startswith("#")])[:5]
+    topic = [h.replace(" ", "") for h in res.get("hashtags", []) if isinstance(h, str) and h.startswith("#")][:4]
+    tags = list(dict.fromkeys(["#Nepal", "#NepalNews"] + topic))[:6] + ["#NepalCanvas"]
+    res["hashtags"] = list(dict.fromkeys(tags))
+    res["punch"] = (res.get("punch") or "").strip()[:26]
     res["cards"] = [c[:60] for c in res.get("cards", [])][:4]
     res["headline"] = res.get("headline", story["title"])[:60]
     res["source"] = story["source"]

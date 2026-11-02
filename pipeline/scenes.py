@@ -37,7 +37,7 @@ def plan(script: str, headline: str, category: str) -> list[dict]:
             continue
         out.append({"text": s["text"], "subject": s.get("subject", ""), "wiki_title": s.get("wiki_title", ""),
                     "query_en": s.get("query_en", ""), "source": s.get("source", "stock"), "card": s.get("card", ""),
-                    "map": s.get("map", ""), "map_ne": s.get("map_ne", ""),
+                    "map": s.get("map", ""), "map_ne": s.get("map_ne", ""), "video_query": s.get("video_query", ""),
                     "number": s.get("number") if isinstance(s.get("number"), dict) else None})
     return out
 
@@ -126,27 +126,31 @@ def _stock(q_en: str, kinds=("photos", "videos")):
     return cands
 
 
+def _videos(q: str, n: int):
+    """Real moving footage (vertical stock video) for a query."""
+    if not q:
+        return []
+    out = [(t, url, dur, "Pixabay") for t, url, dur in visuals.search(q, n + 2, "videos") if t == "video"]
+    random.shuffle(out)
+    return out
+
+
 def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: set | None = None):
-    """Return up to `want` visuals [(kind, path, dur, credit)] for one scene, most relevant first.
-    Several shots per scene keep cuts every ~3-4 s instead of one photo held for 15 s."""
+    """Return up to `want` visuals [(kind, path, dur, credit)] for one scene.
+    Mix: about half real moving footage (stock video for `video_query`), the rest the most relevant
+    photos of the named subject. Scene 0 opens on motion so the first second is not a still."""
     used = used if used is not None else set()
     named = scene.get("source") == "commons" or bool(scene.get("wiki_title"))
     subject, q_en = scene.get("subject") or "", scene.get("query_en") or scene.get("subject") or ""
-    if named:
-        order = [lambda: wikipedia(scene.get("wiki_title") or subject, 4),
-                 lambda: commons(subject, 4),
-                 lambda: _stock(q_en, ("videos", "photos"))]
-    else:
-        order = [lambda: _stock(q_en, ("videos", "photos")),
-                 lambda: commons(subject, 3)]
-    got = []
-    for si, get in enumerate(order):
-        if got and named and si == len(order) - 1:
-            break  # do not pad a named subject with generic stock
-        cands = get()
-        if cands and cands[0][3] == "Pixabay":
-            random.shuffle(cands)
+    vq = scene.get("video_query") or q_en
+    n_vid = max(1, want // 2) if (named and want > 1) or idx == 0 else want
+    if not named:
+        n_vid = want
+
+    def take(cands, limit, got):
         for kind, url, dur, credit in cands:
+            if len(got) >= limit:
+                break
             if url in used:
                 continue
             ext = ".mp4" if kind == "video" else ".jpg"
@@ -158,6 +162,21 @@ def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: s
                     got.append((kind, p, dur, credit))
             except Exception as e:
                 print(f"[scene {idx}] download failed: {e}")
-            if len(got) >= want:
-                return got
-    return got
+        return got
+
+    vids = take(_videos(vq, n_vid), n_vid, [])
+    if len(vids) < n_vid and q_en != vq:
+        vids = take(_videos(q_en, n_vid), n_vid, vids)
+    photos = []
+    need = want - len(vids)
+    if need > 0:
+        sources_ = ([lambda: wikipedia(scene.get("wiki_title") or subject, 4), lambda: commons(subject, 4)]
+                    if named else [lambda: _stock(q_en, ("photos",)), lambda: commons(subject, 3)])
+        for get in sources_:
+            photos = take(get(), need, photos)
+            if len(photos) >= need:
+                break
+    # named subject: its photo first (relevance), then footage; scene 0 / generic: footage first (motion)
+    got = (photos + vids) if (named and idx > 0) else (vids + photos)
+    print(f"[scene {idx}] {sum(1 for g in got if g[0] == 'video')} video + {sum(1 for g in got if g[0] != 'video')} photo")
+    return got[:want]

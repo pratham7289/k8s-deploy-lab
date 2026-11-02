@@ -135,13 +135,13 @@ def main():
     out = work / "reel.mp4"
     t1 = time.time()
     render.build(voice, vlen, says, shows, sent_times, pack["headline"], pack.get("kicker", ""), end_card,
-                 plan, work, out, tpl)
+                 plan, work, out, tpl, punch=pack.get("punch", ""))
     total = tts.duration(out)
     print(f"[main] rendered {out} total={total:.1f}s voice={vlen:.1f}s render={time.time() - t1:.0f}s")
     credits = [c for c in (work / "credits.txt").read_text(encoding="utf-8").splitlines() if c.strip()]
     photo_line = ("\nतस्बिर: " + "; ".join(credits[:5])) if credits else ""
-    caption = f"{pack.get('caption_ne', pack['headline'])}\n{pack.get('caption_en', '')}\n" \
-              f"स्रोत: {pack['source']}{photo_line}\n{' '.join(pack['hashtags'])}"
+    caption = f"{pack.get('caption_ne', pack['headline']).strip()}\n\n{pack.get('caption_en', '').strip()}\n\n" \
+              f"स्रोत: {pack['source']}{photo_line}\n\n{' '.join(pack['hashtags'])}"
     (work / "caption.txt").write_text(caption, encoding="utf-8")
     print("[main] caption:\n" + caption)
     if total > 89.5:
