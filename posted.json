@@ -138,5 +138,15 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-02T16:00:00+05:45",
   "published_at": "2026-11-02T16:00:00+05:45"
+ },
+ {
+  "id": "c713d5099754",
+  "title": "Rashid, Karan power Kathmandu Gorkhas to first NPL win over Karnali Yaks",
+  "fb_video_id": "1786586793467351",
+  "slot": "evening",
+  "slot_key": "2026-11-02-1900",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-02T19:00:00+05:45",
+  "published_at": "2026-11-02T19:00:00+05:45"
  }
 ]
