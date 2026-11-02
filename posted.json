@@ -128,5 +128,15 @@
   "state": "PUBLISHED",
   "scheduled_for": null,
   "published_at": "2026-11-02T07:03:12.866522+00:00"
+ },
+ {
+  "id": "21f5056cad20",
+  "title": "समसामयिक विषयमा विपक्षी दलको बैठक सुरु",
+  "fb_video_id": "1787679845798131",
+  "slot": "publicinfo",
+  "slot_key": "2026-11-02-1600",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-02T16:00:00+05:45",
+  "published_at": "2026-11-02T16:00:00+05:45"
  }
 ]
