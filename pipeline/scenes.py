@@ -36,7 +36,9 @@ def plan(script: str, headline: str, category: str) -> list[dict]:
         if not s.get("text"):
             continue
         out.append({"text": s["text"], "subject": s.get("subject", ""), "wiki_title": s.get("wiki_title", ""),
-                    "query_en": s.get("query_en", ""), "source": s.get("source", "stock"), "card": s.get("card", "")})
+                    "query_en": s.get("query_en", ""), "source": s.get("source", "stock"), "card": s.get("card", ""),
+                    "map": s.get("map", ""), "map_ne": s.get("map_ne", ""),
+                    "number": s.get("number") if isinstance(s.get("number"), dict) else None})
     return out
 
 

@@ -12,7 +12,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import os
-from . import config, facebook, render, scenes, schedule, score, sources, token, tts, visuals, write
+from . import config, facebook, infocards, render, scenes, schedule, score, sources, token, tts, visuals, write
 
 
 MAX_VOICE = 83.0  # LEAD + voice + TAIL + OUTRO must stay under 90 s
@@ -114,7 +114,21 @@ def main():
     used, shots = set(), 0
     for i, sc in enumerate(plan):
         est = len(sc.get("text", "")) / 14  # ~14 Devanagari chars per second of speech
-        sc["visuals"] = scenes.fetch_for_scene(sc, work, i, want=max(1, min(3, round(est / 4))), used=used)
+        info = []
+        try:
+            if i > 0 and sc.get("map"):
+                m = infocards.map_card(sc["map"], sc.get("map_ne", ""), pack.get("kicker", ""), work / f"map{i}.png")
+                if m:
+                    info.append(("card", m, 0, "geoBoundaries (CC BY 4.0)"))
+            num = sc.get("number") or {}
+            if i > 0 and num.get("value") and any(ch.isdigit() for ch in num["value"]):
+                n = infocards.number_card(num["value"], num.get("label", ""), work / f"num{i}.png")
+                if n:
+                    info.append(("card", n, 0, None))
+        except Exception as e:
+            print(f"[main] info card failed: {e}")
+        want = max(1, min(3, round(est / 4)) - len(info))
+        sc["visuals"] = info + scenes.fetch_for_scene(sc, work, i, want=want, used=used)
         shots += len(sc["visuals"])
     print(f"[main] scenes={len(plan)} visuals={shots} ({time.time() - t0:.0f}s so far)")
 
@@ -155,6 +169,11 @@ def main():
                    "published_at": (at or datetime.now(timezone.utc)).isoformat()})
     config.POSTED.write_text(json.dumps(posted[-500:], ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[main] published video {vid}")
+    try:
+        from . import analytics
+        analytics.update(posted, config.FB_PAGE_TOKEN)
+    except Exception as e:
+        print(f"[main] stats skipped: {e}")
 
 
 if __name__ == "__main__":

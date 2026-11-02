@@ -35,22 +35,56 @@ def _enc():
 
 # ---------- overlays (Pillow + raqm, so Devanagari shapes correctly) ----------
 
-def _sub_png(text: str, path: Path):
+HILITE = (255, 210, 0, 255)   # the word being spoken
+_BRAND = {}
+
+
+def _brand(im):
+    """Small fixed 'NEPAL CANVAS' mark, top-left, on every frame."""
+    if "png" not in _BRAND:
+        b = Image.new("RGBA", (W, 160), (0, 0, 0, 0))
+        d = ImageDraw.Draw(b)
+        f = visuals._font(34, latin=True)
+        tw = d.textlength("NEPAL CANVAS", font=f)
+        d.rounded_rectangle([60, 70, 60 + tw + 64, 124], radius=12, fill=(10, 14, 26, 170))
+        d.ellipse([76, 89, 92, 105], fill=(220, 20, 60, 255))
+        d.text((104, 76), "NEPAL CANVAS", font=f, fill=(255, 255, 255, 235))
+        _BRAND["png"] = b
+    im.alpha_composite(_BRAND["png"], (0, 0))
+
+
+def _sub_png(text: str, path: Path, hi: int = -1):
+    """Subtitle phrase in a dark box; word number `hi` is highlighted (karaoke style)."""
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    _brand(im)
     if text:
         d = ImageDraw.Draw(im)
         f = visuals._font(62)
-        lines = visuals._wrap(d, text, f, W - 300)[:2]
-        widths = [d.textlength(ln, font=f) for ln in lines]
-        bw, bh = int(max(widths)) + 84, 40 + 84 * len(lines)
+        words = text.split()
+        sp = d.textlength(" ", font=f)
+        lines, cur, cw = [], [], 0.0
+        for i, w in enumerate(words):
+            ww = d.textlength(w, font=f)
+            if cur and cw + sp + ww > W - 300:
+                lines.append((cur, cw)); cur, cw = [], 0.0
+            cw = cw + sp + ww if cur else ww
+            cur.append((i, w, ww))
+        if cur:
+            lines.append((cur, cw))
+        lines = lines[:2]
+        bw, bh = int(max(lw for _, lw in lines)) + 84, 40 + 84 * len(lines)
         cx = W // 2 - 20                      # keep clear of the Reels buttons on the right
         x0, y0 = cx - bw // 2, H - 640 - bh   # above the caption/username area
         d.rounded_rectangle([x0, y0, x0 + bw, y0 + bh], radius=24, fill=(10, 14, 26, 200))
         d.rectangle([x0, y0 + 16, x0 + 8, y0 + bh - 16], fill=(220, 20, 60, 255))
         y = y0 + 18
-        for ln, lw in zip(lines, widths):
-            d.text((cx - lw / 2, y), ln, font=f, fill=(255, 255, 255, 255)); y += 84
-    im.save(path)
+        for ln, lw in lines:
+            x = cx - lw / 2
+            for i, w, ww in ln:
+                d.text((x, y), w, font=f, fill=HILITE if i == hi else (255, 255, 255, 255))
+                x += ww + sp
+            y += 84
+    im.save(path, compress_level=1)
     return path
 
 
@@ -95,20 +129,22 @@ def _phrases(text: str, max_lines: int = 2) -> list[str]:
 
 
 def _subtitle_track(cues: list[tuple[float, float, str]], total: float, workdir: Path) -> Path:
-    """Concat-demuxer list of full-frame transparent PNGs, one per phrase, gaps blank."""
+    """Concat-demuxer list of full-frame transparent PNGs: one per spoken word (that word highlighted
+    inside its phrase), timed by character share within the sentence; gaps show only the brand mark."""
     blank = _sub_png("", workdir / "sub_blank.png")
     items, t, n = [], 0.0, 0
     for start, end, text in cues:
-        phs = _phrases(text)
-        chars = sum(len(p) for p in phs) or 1
-        a = start
-        for ph in phs:
-            b = a + (end - start) * len(ph) / chars
-            if a > t + 0.02:
-                items.append((blank, a - t))
-            png = _sub_png(ph, workdir / f"sub{n:03d}.png"); n += 1
-            items.append((png, b - max(a, t)))
-            t = b; a = b
+        words_all = text.split()
+        chars = sum(len(w) + 1 for w in words_all) or 1
+        a = max(start, t)
+        if a > t + 0.02:
+            items.append((blank, a - t)); t = a
+        for ph in _phrases(text):
+            for k, w in enumerate(ph.split()):
+                b = a + (end - start) * (len(w) + 1) / chars
+                png = _sub_png(ph, workdir / f"sub{n:04d}.png", hi=k); n += 1
+                items.append((png, b - t))
+                t = a = b
     if total > t:
         items.append((blank, total - t))
     lst = workdir / "subs.txt"
@@ -235,7 +271,8 @@ def build(voice: Path, voice_len: float, sentences: list[str], shows: list[str],
     bed = _bed(workdir, total)
     fc = (f"[1:v]format=rgba[s];[0:v][s]overlay=0:0:eof_action=pass[v1];"
           f"[2:v]format=rgba,fade=t=out:st={HOOK_SECS - 0.4:.2f}:d=0.4:alpha=1[h];"
-          f"[v1][h]overlay=0:0:eof_action=pass,format=yuv420p[v];"
+          f"[v1][h]overlay=0:0:eof_action=pass[v2];"
+          f"[v2][5:v]overlay=x='-w+w*t/{total:.3f}':y=0:eof_action=pass,format=yuv420p[v];"
           f"[3:a]adelay={int(LEAD * 1000)}|{int(LEAD * 1000)},apad[vo];"
           f"[4:a]volume={MUSIC_DB}dB,afade=t=in:d=1.0,afade=t=out:st={total - 2.0:.2f}:d=2.0[m];"
           f"[vo][m]amix=inputs=2:duration=first:normalize=0[a]")
@@ -243,6 +280,7 @@ def build(voice: Path, voice_len: float, sentences: list[str], shows: list[str],
           "-f", "concat", "-safe", "0", "-i", str(subs),
           "-loop", "1", "-framerate", str(FPS), "-t", f"{HOOK_SECS:.2f}", "-i", str(hook),
           "-i", str(voice), "-stream_loop", "-1", "-i", str(bed),
+          "-f", "lavfi", "-i", f"color=c=0xDC143C:s={W}x10:r={FPS}:d={total:.3f}",
           "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
           "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS),
           "-g", str(FPS * 2), "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "160k",

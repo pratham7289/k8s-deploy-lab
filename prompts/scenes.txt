@@ -6,8 +6,11 @@ For each scene return:
 - "wiki_title": the exact English Wikipedia article title for that subject if one very likely exists (e.g. "Singha Durbar", "Supreme Court of Nepal", "Tribhuvan International Airport", "Nepal Rastra Bank", "Dengue fever", "Kathmandu", "Melamchi Water Supply Project", "Federal Parliament of Nepal", "Nepal Electricity Authority"). Empty string if the sentences are abstract (advice, what it means for you) and no article fits.
 - "query_en": 2-4 plain English words for a generic stock-footage search of the same idea (used only if no article photo exists): e.g. "parliament building", "police vehicle street", "mosquito closeup", "hospital corridor", "rain street umbrella".
 - "source": "commons" when wiki_title is set or the subject is a named Nepali place/institution/event; otherwise "stock".
+- "map": ONLY when these sentences say where something happened in a specific Nepali DISTRICT, the district's English name as on Wikipedia ("Sindhupalchok", "Kaski", "Jhapa"); else "". Use it in at most 2 scenes.
+- "map_ne": that district's Nepali name ("सिन्धुपाल्चोक"), else "".
+- "number": ONLY when these sentences hinge on one key number (an amount, a count, a percent, a date), {"value": "<the number in Devanagari digits with its unit, <= 10 chars, e.g. ४०%, रु. ५ अर्ब, १२५>", "label": "<= 40 chars Nepali: what the number is>"}; else null. Use it in at most 2 scenes, and never for a number the script does not say.
 - "card": a <= 50 character Nepali phrase with this scene's key fact (on-screen caption; also the fallback card when no picture fits).
 
 Rules: never choose images of identifiable private individuals, victims, injuries, or children. For politicians use their office/building ("Office of the Prime Minister and Council of Ministers", wiki_title "Singha Durbar"), not their face. For a ministry, use the ministry's building or Singha Durbar. For weather use the place affected. For prices use the product or the market.
 
-Return ONLY JSON: {"scenes":[{"text":"...","subject":"...","wiki_title":"...","query_en":"...","source":"commons","card":"..."}]}
+Return ONLY JSON: {"scenes":[{"text":"...","subject":"...","wiki_title":"...","query_en":"...","source":"commons","card":"...","map":"","map_ne":"","number":null}]}

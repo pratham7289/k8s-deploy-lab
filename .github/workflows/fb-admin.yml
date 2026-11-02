@@ -1,0 +1,43 @@
+name: fb-admin
+on:
+  workflow_dispatch:
+    inputs:
+      cmd:
+        description: "delete | stats"
+        default: stats
+      args:
+        description: "video ids for delete (space separated)"
+        default: ""
+  schedule:
+    - cron: "40 17 * * *"   # 23:25 NPT: daily stats
+permissions:
+  contents: write
+concurrency: post-reel
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q requests
+      - name: Run
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_APP_ID: ${{ secrets.FB_APP_ID }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+        run: python scripts/fb_admin.py ${{ github.event.inputs.cmd || 'stats' }} ${{ github.event.inputs.args }}
+      - name: Save
+        run: |
+          git config user.name "nepal-canvas-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add posted.json
+          [ -f stats.json ] && git add stats.json
+          [ -f token.enc ] && git add token.enc
+          git diff --cached --quiet && exit 0
+          git commit -m "admin: $(date -u +%FT%TZ)"
+          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
+          exit 1
