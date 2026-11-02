@@ -1,7 +1,7 @@
 """Score candidates 0-100 and pick one for the slot."""
 import json
 
-from . import config, llm
+from . import config, llm, sources
 
 
 def pick(cands, slot: str):
@@ -11,13 +11,14 @@ def pick(cands, slot: str):
     # keep the prompt small: the 35 newest, most-covered stories (Indian outlets capped at 8)
     nepal = [s for s in cands if s["category"] != "india"]
     india = [s for s in cands if s["category"] == "india"][:8]
-    cands = sorted(nepal[:60] + india, key=lambda s: (s.get("age_h", 99) > 12, -s.get("coverage", 0), s.get("age_h", 99)))[:35]
+    cands = sorted(nepal[:80] + india, key=lambda s: (s.get("age_h", 99) > 12, -s.get("trend", 0), -s.get("coverage", 0), s.get("age_h", 99)))[:40]
     rows = [{"i": i, "source": s["source"], "category": s["category"], "title": s["title"],
-             "snippet": s["text"][:300], "coverage": s.get("coverage", 0), "age_h": s.get("age_h"),
+             "snippet": s["text"][:300], "coverage": s.get("coverage", 0), "age_h": s.get("age_h"), "trend": s.get("trend", 0),
              "traffic": s.get("traffic", "")} for i, s in enumerate(cands)]
     res = llm.ask_json(
         config.prompt("score"),
-        json.dumps({"slot": slot, "preferred_categories": prefer, "candidates": rows}, ensure_ascii=False),
+        json.dumps({"slot": slot, "preferred_categories": prefer, "trending_now": sources.TREND_CONTEXT,
+                    "candidates": rows}, ensure_ascii=False),
         temperature=0.2,
     )
     scored = res.get("scored", [])

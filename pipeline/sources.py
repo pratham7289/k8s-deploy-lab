@@ -49,6 +49,7 @@ UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, 
       "Accept": "application/rss+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.5"}
 TAG = re.compile(r"<[^>]+>")
 RAW_DATES = []   # unparsed date strings, shown by the health check
+TREND_CONTEXT = {}  # hot topics + social trends from the last candidates() call
 ERRORS = {}      # site -> last error, shown by the health check
 
 
@@ -251,6 +252,9 @@ def candidates(max_age_hours=None):
         s["coverage"] = sum(1 for u in titles if len(words & set(u.split())) >= 4)
     out.sort(key=lambda s: s["published"], reverse=True)
     print(f"[sources] {len(out)} candidates within {hours}h from {sum(1 for b in batches if b)}/{len(SITES)} sites")
+    from . import trending
+    global TREND_CONTEXT
+    out, TREND_CONTEXT = trending.annotate(out, posted)
     return out
 
 

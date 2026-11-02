@@ -1,7 +1,7 @@
 """Fixed daily posting slots, independent of when GitHub actually starts the job.
 
-GitHub's cron can start hours late, so the job runs ~2.5 h BEFORE each slot (three attempts, one hour
-apart), renders the Reel and hands it to Facebook with scheduled_publish_time = the exact slot time.
+GitHub's cron can start late, so the job runs before each slot (attempts at about 100, 60 and 25 minutes
+before), renders the Reel and hands it to Facebook with scheduled_publish_time = the exact slot time.
 Facebook then publishes on the minute. A slot that is already done (posted.json has its key) is skipped,
 so the extra attempts cost almost nothing. A slot missed completely is still posted up to LATE_MAX
 minutes late rather than dropped.
@@ -15,9 +15,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 NPT = timezone(timedelta(hours=5, minutes=45))
-SLOTS = [(7, 0, "morning"), (13, 0, "breaking"), (16, 0, "publicinfo")]  # Nepal time, owner's choice
-AHEAD_MAX = 240   # start preparing a slot at most 4 h before it
-LATE_MAX = 150    # still post a missed slot up to 2.5 h late
+SLOTS = [(7, 0, "morning"), (10, 0, "politics"), (13, 0, "breaking"), (16, 0, "publicinfo"), (19, 0, "evening")]  # 5 a day, 3 h apart
+AHEAD_MAX = 110   # prepare a slot at most ~1 h 50 m before it, so the news is fresh
+LATE_MAX = 90     # still post a missed slot up to 1.5 h late (next slot is 3 h later)
 MIN_LEAD = 15     # Facebook needs the scheduled time >= 10 min ahead; below this publish immediately
 POSTED = Path(__file__).resolve().parent.parent / "posted.json"
 
