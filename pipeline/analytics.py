@@ -12,8 +12,9 @@ import requests
 from . import config
 
 STATS = Path(__file__).resolve().parent.parent / "stats.json"
-METRICS = {"blue_reels_play_count": "plays", "post_impressions_unique": "reach",
+METRICS = {"fb_reels_total_plays": "plays", "blue_reels_play_count": "plays", "post_impressions_unique": "reach",
            "post_video_avg_time_watched": "avg_watch_ms", "post_video_views": "views_3s"}
+_ERR = []
 
 
 def _get(path, tok, **params):
@@ -24,11 +25,15 @@ def _get(path, tok, **params):
 def video_stats(vid: str, tok: str) -> dict:
     out = {}
     for name, key in METRICS.items():  # one call per metric, so one refused metric does not kill the rest
+        if key in out:
+            continue
         d = _get(f"{vid}/video_insights", tok, metric=name)
         try:
             out[key] = d["data"][0]["values"][0]["value"]
         except Exception:
-            pass
+            if len(_ERR) < 3:
+                _ERR.append(f"{name}: {str(d)[:220]}")
+                print(f"[analytics] {_ERR[-1]}")
     if "avg_watch_ms" in out:
         out["avg_watch_s"] = round(out.pop("avg_watch_ms") / 1000, 1)
     d = _get(vid, tok, fields="likes.summary(true).limit(0),comments.summary(true).limit(0),length")
