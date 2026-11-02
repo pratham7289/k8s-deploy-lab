@@ -21,8 +21,21 @@ def main():
     if cmd == "delete":
         posted = json.loads(config.POSTED.read_text())
         for vid in args:
-            r = requests.delete(f"{config.GRAPH}/{vid}", params={"access_token": tok}, timeout=30)
-            print(f"[admin] delete {vid}: {r.status_code} {r.text[:200]}")
+            info = requests.get(f"{config.GRAPH}/{vid}", params={"fields": "id,post_id,permalink_url,status",
+                                                                   "access_token": tok}, timeout=30)
+            print(f"[admin] info {vid}: {info.status_code} {info.text[:300]}")
+            targets = [vid]
+            try:
+                pid = info.json().get("post_id")
+                if pid:
+                    targets.append(pid if "_" in pid else f"{config.FB_PAGE_ID}_{pid}")
+            except Exception:
+                pass
+            for t in targets:
+                r = requests.delete(f"{config.GRAPH}/{t}", params={"access_token": tok}, timeout=30)
+                print(f"[admin] delete {t}: {r.status_code} {r.text[:160]}")
+                if r.ok:
+                    break
             if r.ok:
                 for p in posted:
                     if p.get("fb_video_id") == vid:
