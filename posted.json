@@ -288,5 +288,16 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-03T16:00:00+05:45",
   "published_at": "2026-11-03T16:00:00+05:45"
+ },
+ {
+  "id": "a40b572ca934",
+  "title": "How can Nepal’s Parliament impeach Supreme Court judges?",
+  "fb_video_id": "1435467791414591",
+  "source": "The Kathmandu Post",
+  "slot": "politics",
+  "slot_key": "2026-11-03-1700",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-03T17:00:00+05:45",
+  "published_at": "2026-11-03T17:00:00+05:45"
  }
 ]
