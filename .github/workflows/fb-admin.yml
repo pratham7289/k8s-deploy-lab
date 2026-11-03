@@ -30,14 +30,5 @@ jobs:
           FB_APP_ID: ${{ secrets.FB_APP_ID }}
           FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
         run: python scripts/fb_admin.py ${{ github.event.inputs.cmd || 'stats' }} ${{ github.event.inputs.args }}
-      - name: Save
-        run: |
-          git config user.name "nepal-canvas-bot"
-          git config user.email "bot@users.noreply.github.com"
-          git add posted.json
-          [ -f stats.json ] && git add stats.json
-          [ -f token.enc ] && git add token.enc
-          git diff --cached --quiet && exit 0
-          git commit -m "admin: $(date -u +%FT%TZ)"
-          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
-          exit 1
+      - name: Save state
+        run: python3 scripts/save_state.py "admin: $(date -u +%FT%TZ)"

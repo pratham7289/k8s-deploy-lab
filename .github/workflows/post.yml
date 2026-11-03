@@ -69,18 +69,7 @@ jobs:
         run: python -m pipeline.main
       - name: Save state
         if: steps.go.outputs.run == 'yes'
-        run: |
-          git config user.name "nepal-canvas-bot"
-          git config user.email "bot@users.noreply.github.com"
-          git add posted.json
-          [ -f stats.json ] && git add stats.json
-          [ -d assets/maps ] && git add assets/maps
-          [ -f token.enc ] && git add token.enc
-          git rm -q --cached --ignore-unmatch token.json
-          git diff --cached --quiet && exit 0
-          git commit -m "post: $(date -u +%FT%TZ)"
-          for i in 1 2 3; do git pull --rebase -q && git push && exit 0; sleep 10; done
-          exit 1
+        run: python3 scripts/save_state.py "post: $(date -u +%FT%TZ)"
       - uses: actions/upload-artifact@v4
         if: always() && steps.go.outputs.run == 'yes'
         with:

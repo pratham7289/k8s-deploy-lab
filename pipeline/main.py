@@ -12,7 +12,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import os
-from . import config, facebook, infocards, render, scenes, schedule, score, sources, token, tts, visuals, write
+from . import config, facebook, infocards, link, render, scenes, schedule, score, sources, token, tts, visuals, write
 
 
 MAX_VOICE = 83.0  # LEAD + voice + TAIL + OUTRO must stay under 90 s
@@ -51,18 +51,38 @@ def main():
     slot = os.getenv("SLOT_KIND") or config.slot_for_now()
     slot_key, slot_time = os.getenv("SLOT_KEY", ""), os.getenv("SLOT_TIME", "")
     posted = sources.load_posted()
+    link_url = os.getenv("LINK", "").strip()
+    link_story = None
+    if link_url:  # the owner pasted a link: build and publish it now (or at AT=HH:MM Nepal time)
+        try:
+            link_story = link.story_from_link(link_url)
+        except Exception as e:
+            print(f"[main] link failed: {e}")
+            alert("Nepal Canvas: link could not be read", f"{link_url}\n{e}")
+            raise SystemExit(1)
+        slot, slot_key = "breaking", f"link-{link_story['id']}"
+        at_txt = os.getenv("AT", "").strip()
+        if at_txt:
+            hh, mm = (int(x) for x in at_txt.split(":"))
+            t = datetime.now(config.NPT).replace(hour=hh, minute=mm, second=0, microsecond=0)
+            if t < datetime.now(config.NPT):
+                t += timedelta(days=1)
+            slot_time = t.isoformat()
     print(f"[main] slot={slot} key={slot_key or 'manual'} for={slot_time or 'now'} mode={config.MODE} "
           f"posted24h={posts_last_24h(posted)}")
     if slot_key and any(p.get("slot_key") == slot_key for p in posted):
         print("[main] slot already done"); return
-    if config.MODE != "dry" and posts_last_24h(posted) >= config.MAX_POSTS_24H:
+    cap = 29 if link_url else config.MAX_POSTS_24H  # owner links may use the last slots under Meta's 30
+    if config.MODE != "dry" and posts_last_24h(posted) >= cap:
         print("[main] 24h cap reached, skipping"); return
 
     work = config.OUT / datetime.now(config.NPT).strftime("%Y%m%d-%H%M")
     work.mkdir(parents=True, exist_ok=True)
 
     breaking = os.getenv("BREAKING") == "1"
-    if breaking:
+    if link_story:
+        story = link_story
+    elif breaking:
         # extra Reel only for a story many outlets are carrying right now; otherwise post nothing
         cands = sources.candidates()
         hot = [c for c in cands if c.get("category") != "india" and c.get("age_h", 99) <= 3

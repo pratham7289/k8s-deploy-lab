@@ -1,0 +1,63 @@
+name: post-link
+# Paste any news link -> a Reel is written, voiced, rendered and published.
+# Runs in parallel with the hourly post-reel job (separate concurrency group).
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: "News article link (any site that can be read; not Kantipur/Ujyaalo)"
+        required: true
+      at:
+        description: "Optional Nepal time to publish, e.g. 18:30. Empty = publish now"
+        required: false
+        default: ""
+      mode:
+        description: "publish | draft | dry"
+        default: "publish"
+permissions:
+  contents: write
+concurrency:
+  group: post-link-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 >/dev/null
+      - run: pip install -q -r requirements.txt
+      - name: Fetch fonts (OFL) if missing
+        run: |
+          mkdir -p assets/fonts
+          [ -f assets/fonts/NotoSansDevanagari.ttf ] || curl -sSL -o assets/fonts/NotoSansDevanagari.ttf "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
+          [ -f assets/fonts/NotoSans.ttf ] || curl -sSL -o assets/fonts/NotoSans.ttf "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"
+      - name: Build and publish
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_APP_ID: ${{ secrets.FB_APP_ID }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          LINK: ${{ github.event.inputs.link }}
+          AT: ${{ github.event.inputs.at }}
+          MODE: ${{ github.event.inputs.mode || 'publish' }}
+        run: python -m pipeline.main
+      - name: Save state
+        run: python3 scripts/save_state.py "link: $(date -u +%FT%TZ)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reel-link-${{ github.run_id }}
+          path: |
+            out/*/reel.mp4
+            out/*/caption.txt
+          retention-days: 7
+          if-no-files-found: ignore

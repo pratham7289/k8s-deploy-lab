@@ -44,7 +44,7 @@ def _words(res: dict) -> int:
 
 
 def write(story: dict, shorter: bool = False) -> dict:
-    article = fetch_article(story["link"]) if story.get("link") else ""
+    article = story.get("article") or (fetch_article(story["link"]) if story.get("link") else "")
     from datetime import datetime
     pub = story.get("published", "")
     payload = {"source": story["source"], "title": story["title"], "category": story["category"],
