@@ -1,3 +1,4 @@
-requests>=2.31
-pillow>=10.0
-edge-tts>=6.1
+# exact versions: an upstream release cannot silently change what runs
+requests==2.34.2
+pillow==13.0.0
+edge-tts==7.3.1
