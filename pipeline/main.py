@@ -178,6 +178,7 @@ def main():
         alert("Nepal Canvas: publish failed", f"{pack['headline']}\n{e}")
         return  # exit 0 on purpose
     posted.append({"id": pack["id"], "title": pack.get("title", pack["headline"]), "fb_video_id": vid,
+                   "source": pack.get("source", ""),
                    "slot": slot, "slot_key": (slot_key or None) if state != "DRAFT" else None, "state": state,
                    "scheduled_for": at.isoformat() if at else None,
                    "published_at": (at or datetime.now(timezone.utc)).isoformat()})
