@@ -15,12 +15,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 NPT = timezone(timedelta(hours=5, minutes=45))
-KINDS = {6: "morning", 7: "morning", 8: "politics", 9: "breaking", 10: "politics", 11: "breaking",
-         12: "publicinfo", 13: "breaking", 14: "politics", 15: "publicinfo", 16: "breaking", 17: "politics",
-         18: "evening", 19: "breaking", 20: "evening", 21: "politics", 22: "evening"}
-SLOTS = [(h, 0, k) for h, k in KINDS.items()]  # 17 a day, every hour 06:00-22:00
+# 10 a day at the hours Nepali Facebook is busiest: morning, lunch, evening
+KINDS = {7: "morning", 8: "politics", 10: "breaking", 12: "publicinfo", 13: "politics",
+         15: "breaking", 17: "publicinfo", 19: "evening", 20: "politics", 21: "evening"}
+SLOTS = [(h, 0, k) for h, k in KINDS.items()]
 BREAK_HOURS = range(6, 22)   # extra breaking Reels only while people are awake
-BREAK_GAP = 75               # minutes between two breaking Reels
+BREAK_GAP = 180              # minutes between two breaking Reels
+BREAK_PER_DAY = 3            # at most 3 genuinely breaking Reels a day
 BREAK_MAX_24H = 25           # total posts in 24 h before breaking checks stop (Meta cap is 30)
 AHEAD_MAX = 58    # prepare a slot at most ~1 h before it (cron-job.org runs at :05 and :35)
 LATE_MAX = 40     # still post a missed slot up to 40 min late (next slot is 1 h later)
@@ -64,6 +65,8 @@ def breaking_due(posted, now=None):
     if sum(1 for t, _ in recent if now - t < timedelta(hours=24)) >= BREAK_MAX_24H:
         return None
     if any(k.startswith("brk-") and now - t < timedelta(minutes=BREAK_GAP) for t, k in recent):
+        return None
+    if sum(1 for t, k in recent if k.startswith("brk-") and now - t < timedelta(hours=24)) >= BREAK_PER_DAY:
         return None
     return "brk-" + now.astimezone(NPT).strftime("%Y-%m-%d-%H%M")
 

@@ -34,8 +34,31 @@ def _same_story(a, b):
     return bool(ta and tb) and len(ta & tb) >= max(2, 0.4 * min(len(ta), len(tb)))
 
 
+def _is_repeat(story, recent):
+    """Second, strict check by the model: same main person/institution + same case/issue = same story."""
+    if not recent:
+        return False
+    try:
+        res = llm.ask_json(
+            "You check a Nepali news page for repeats. Answer ONLY JSON {\"repeat\": true|false, \"which\": \"...\"}. "
+            "repeat=true if the candidate is about the same main person, institution or incident AND the same case, "
+            "issue, event or decision as ANY recent title, even if it is a later stage (charge, hearing, verdict, "
+            "update, reaction), uses different words or spelling, or comes from another outlet. "
+            "Different people or different issues are not repeats.",
+            json.dumps({"candidate": story["title"] + " — " + story.get("text", "")[:300], "recent": recent},
+                       ensure_ascii=False), temperature=0)
+        if res.get("repeat"):
+            print(f"[score] repeat of: {str(res.get('which', ''))[:70]}")
+            return True
+    except Exception as e:
+        print(f"[score] repeat check failed: {e}")
+    return False
+
+
 def _best_outlet(story, cands):
-    """Same event, readable article, preferred outlet."""
+    """Only when the chosen item has no readable article (Google News link): use the same story from a readable outlet."""
+    if "news.google.com" not in story.get("link", ""):
+        return story
     twins = [c for c in cands if c is not story and c.get("source") in PREFERRED
              and "news.google.com" not in c.get("link", "") and _same_story(story, c)]
     rank = lambda c: PREFERRED.index(c["source"])
@@ -95,6 +118,23 @@ def pick(cands, slot: str):
         print("[score] nothing >= MIN_SCORE")
         return None
     sc, i, row, _ = best
+    recent_titles = _recent_titles()
+    if _is_repeat(cands[i], recent_titles):  # try the next best ones
+        ranked = sorted((r for r in scored if r is not row), key=lambda r: -int(r.get("score", 0) or 0))
+        best = None
+        for r in ranked[:4]:
+            try:
+                j = int(r["i"]); scj = int(r["score"])
+            except Exception:
+                continue
+            if (scj < config.MIN_SCORE or j >= len(cands) or not r.get("verified") or r.get("reject")
+                    or r.get("same_as_posted") or _is_repeat(cands[j], recent_titles)):
+                continue
+            best = (scj, j, r, scj); break
+        if best is None:
+            print("[score] only repeats available")
+            return None
+        sc, i, row, _ = best
     s = dict(_best_outlet(cands[i], allc)); s["score"] = sc; s["category"] = row.get("category", s["category"])
     s["reason"] = row.get("reason", "")
     print(f"[score] picked {sc}: {s['title'][:70]}")

@@ -85,15 +85,16 @@ def main():
     elif breaking:
         # extra Reel only for a story many outlets are carrying right now; otherwise post nothing
         cands = sources.candidates()
-        hot = [c for c in cands if c.get("category") != "india" and c.get("age_h", 99) <= 3
-               and (c.get("coverage", 0) >= 4 or c.get("trend", 0) >= 70)]
+        # genuinely breaking: carried by 6+ outlets within 2 h (not a feature, not sport/entertainment)
+        hot = [c for c in cands if c.get("category") != "india" and c.get("age_h", 99) <= 2
+               and c.get("coverage", 0) >= 6]
         print(f"[main] breaking check: {len(hot)} hot stories")
         if not hot:
             return
-        config.MIN_SCORE = max(config.MIN_SCORE, 80)
+        config.MIN_SCORE = max(config.MIN_SCORE, 85)
         story = score.pick(hot, "breaking")
-        if not story:
-            print("[main] no story strong enough for a breaking Reel"); return
+        if not story or story.get("category") not in ("breaking", "disaster", "accident", "politics", "weather", "notice"):
+            print("[main] no genuinely breaking story right now"); return
     else:
         story = score.pick(sources.candidates(), slot) if config.GEMINI_API_KEY else None
     if story:
