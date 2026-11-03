@@ -233,5 +233,16 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-03T13:00:00+05:45",
   "published_at": "2026-11-03T13:00:00+05:45"
+ },
+ {
+  "id": "4ecb39dcac55",
+  "title": "दुई सातापछि मन्त्रिपरिषद् बैठक बस्दै",
+  "fb_video_id": "1885902179059162",
+  "source": "Onlinekhabar",
+  "slot": "politics",
+  "slot_key": "2026-11-03-1400",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-03T14:00:00+05:45",
+  "published_at": "2026-11-03T14:00:00+05:45"
  }
 ]
