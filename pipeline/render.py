@@ -226,8 +226,7 @@ def _bed(workdir: Path, length: float) -> Path:
     if music:
         return random.choice(music)
     out = workdir / "bed.wav"
-    src = ("sine=f=110:r=48000[a];sine=f=164.8:r=48000[b];sine=f=220.5:r=48000[c];"
-           "[a][b][c]amix=inputs=3:normalize=0,tremolo=f=1.9:d=0.25,lowpass=f=600,volume=0.25")
+    src = "anullsrc=r=48000:cl=stereo"  # no fake humming pad: silence is better than a synthetic drone
     _run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", src, "-t", f"{length + 2:.1f}", str(out)])
     return out
 

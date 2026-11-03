@@ -12,6 +12,11 @@ For each scene return:
 - "number": ONLY when these sentences hinge on one key number (an amount, a count, a percent, a date), {"value": "<the number in Devanagari digits with its unit, <= 10 chars, e.g. ४०%, रु. ५ अर्ब, १२५>", "label": "<= 40 chars Nepali: what the number is>"}; else null. Use it in at most 2 scenes, and never for a number the script does not say.
 - "card": a <= 50 character Nepali phrase with this scene's key fact (on-screen caption; also the fallback card when no picture fits).
 
-Rules: never choose images of identifiable private individuals, victims, injuries, or children. For politicians use their office/building ("Office of the Prime Minister and Council of Ministers", wiki_title "Singha Durbar"), not their face. For a ministry, use the ministry's building or Singha Durbar. For weather use the place affected. For prices use the product or the market.
+Visual rules:
+- Pictures must show the TOPIC, never a literal reading of a word. The outlet's name is not a topic (Kathmandu POST is not a letter-box, Online KHABAR is not a newspaper); "your opinion" / "what do you think" scenes get Nepal street or crowd-free city footage, not books or letters.
+- Places must be in Nepal: write "Kathmandu city aerial", "Kathmandu street traffic", "Nepal hills village", never a generic "city skyline" (that returns foreign cities).
+- For courts, parliament, government, laws or the constitution use the building (Supreme Court of Nepal, Federal Parliament of Nepal, Singha Durbar) or a neutral object (gavel, documents), never a person.
+
+Rules: never choose images of identifiable people at all (no politicians, judges, officials, victims, private individuals), victims, injuries, or children. For politicians use their office/building ("Office of the Prime Minister and Council of Ministers", wiki_title "Singha Durbar"), not their face. For a ministry, use the ministry's building or Singha Durbar. For weather use the place affected. For prices use the product or the market.
 
 Return ONLY JSON: {"scenes":[{"text":"...","subject":"...","wiki_title":"...","query_en":"...","source":"commons","card":"...","video_query":"...","map":"","map_ne":"","number":null}]}

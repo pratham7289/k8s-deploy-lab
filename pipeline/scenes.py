@@ -42,14 +42,20 @@ def plan(script: str, headline: str, category: str) -> list[dict]:
     return out
 
 
+PERSON = re.compile(r"(?i)\b(people|portraits?|politicians?|births|deaths|men|women|persons?|speeches|speakers|"
+                    r"ministers?|members of|leaders?|actors?|actresses|singers?|players?|cricketers?|judges?|"
+                    r"officials?|activists?|journalists?|presidents?|chairm[ae]n|crowds?|faces?|selfies?|families)\b")
+
+
 def _imageinfo(titles: list[str], n: int):
     """Commons imageinfo for File: titles -> [(image, url, 5, credit)] filtered by size + licence."""
     if not titles:
         return []
     try:
         r = requests.get(COMMONS, headers=UA, timeout=20, params={
-            "action": "query", "format": "json", "titles": "|".join(titles[:20]), "prop": "imageinfo",
-            "iiprop": "url|extmetadata|size", "iiurlwidth": 1600, "iiextmetadatafilter": "LicenseShortName|Artist"})
+            "action": "query", "format": "json", "titles": "|".join(titles[:20]), "prop": "imageinfo|categories",
+            "cllimit": "max", "iiprop": "url|extmetadata|size", "iiurlwidth": 1600,
+            "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription"})
         pages = list(r.json().get("query", {}).get("pages", {}).values())
     except Exception as e:
         print(f"[commons] {e}"); return []
@@ -59,6 +65,10 @@ def _imageinfo(titles: list[str], n: int):
         if BAD.search(title):
             continue
         ii = (p.get("imageinfo") or [{}])[0]
+        cats = " ".join(c.get("title", "") for c in p.get("categories", []))
+        desc = re.sub(r"<[^>]+>", " ", ii.get("extmetadata", {}).get("ImageDescription", {}).get("value") or "")
+        if PERSON.search(cats) or PERSON.search(desc[:300]):
+            continue  # never show a real person: a wrong face beside a crime/court story is defamation
         if ii.get("width", 0) < MIN_W or ii.get("height", 0) < 600:
             continue
         lic = (ii.get("extmetadata", {}).get("LicenseShortName", {}).get("value") or "")

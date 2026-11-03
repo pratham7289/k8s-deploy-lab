@@ -23,7 +23,9 @@ from . import config
 GEMINI_TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
 VOICE = "Sulafat"  # owner's pick (voice F in the 1 Nov blind test)
 # Sent as speech_metadata.style, NEVER inside the text (3.8 TTS reads the text field verbatim).
-STYLE = "Calm, confident Nepali television news anchor; steady medium pace; clear diction; warm but neutral."
+STYLE = ("A real Nepali news presenter talking to one viewer on their phone: natural and conversational, "
+         "not reading; lively first sentence, then relaxed; varied intonation; small natural pauses between "
+         "sentences; slight emphasis on names and numbers; warm, human, never robotic or monotone.")
 CHUNK_CHARS = 260          # ~2-3 Nepali sentences per TTS call
 RATE_TOLERANCE = 0.10      # chunks faster/slower than median by more than this get time-stretched
 GAP = 0.32                 # seconds of silence between chunks
@@ -149,7 +151,12 @@ def _gemini_chunked(text: str, path: Path) -> bool:
 
 
 def _finish(wav: Path, path: Path):
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-af", "loudnorm=I=-16:TP=-1.5:LRA=9",
+    # broadcast-style polish: cut rumble, a touch of warmth and presence, gentle compression, very small
+    # room so the voice is not studio-dry (dry, flat TTS is what sounds synthetic), then loudness
+    chain = ("highpass=f=75,equalizer=f=180:t=q:w=1:g=1.5,equalizer=f=3200:t=q:w=1.2:g=2,"
+             "acompressor=threshold=-20dB:ratio=2.5:attack=8:release=120:makeup=2,"
+             "aecho=0.9:0.25:18|31:0.12|0.07,loudnorm=I=-16:TP=-1.5:LRA=9")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-af", chain,
                     "-ar", "48000", "-b:a", "160k", str(path)], check=True)
 
 
