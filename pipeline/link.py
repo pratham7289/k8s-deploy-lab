@@ -46,6 +46,8 @@ def _source_name(url):
 
 def story_from_link(url: str) -> dict:
     r = requests.get(url, headers=sources.UA, timeout=30)
+    if "charset" not in r.headers.get("content-type", "").lower():
+        r.encoding = "utf-8"  # most news sites are UTF-8 but omit the charset; requests would guess Latin-1
     page = r.text
     if r.status_code >= 400 or "Just a moment..." in page[:3000]:
         raise RuntimeError(f"{_source_name(url)} blocks automated readers (HTTP {r.status_code}). "
