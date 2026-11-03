@@ -61,7 +61,21 @@ def main():
     work = config.OUT / datetime.now(config.NPT).strftime("%Y%m%d-%H%M")
     work.mkdir(parents=True, exist_ok=True)
 
-    story = score.pick(sources.candidates(), slot) if config.GEMINI_API_KEY else None
+    breaking = os.getenv("BREAKING") == "1"
+    if breaking:
+        # extra Reel only for a story many outlets are carrying right now; otherwise post nothing
+        cands = sources.candidates()
+        hot = [c for c in cands if c.get("category") != "india" and c.get("age_h", 99) <= 3
+               and (c.get("coverage", 0) >= 4 or c.get("trend", 0) >= 70)]
+        print(f"[main] breaking check: {len(hot)} hot stories")
+        if not hot:
+            return
+        config.MIN_SCORE = max(config.MIN_SCORE, 80)
+        story = score.pick(hot, "breaking")
+        if not story:
+            print("[main] no story strong enough for a breaking Reel"); return
+    else:
+        story = score.pick(sources.candidates(), slot) if config.GEMINI_API_KEY else None
     if story:
         pack = write.write(story)
         pack["id"] = story["id"]; pack["title"] = story["title"]; pack["link"] = story.get("link", "")

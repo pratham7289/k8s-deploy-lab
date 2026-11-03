@@ -15,10 +15,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 NPT = timezone(timedelta(hours=5, minutes=45))
-SLOTS = [(7, 0, "morning"), (9, 0, "politics"), (11, 0, "breaking"), (13, 0, "breaking"),
-         (15, 0, "publicinfo"), (17, 0, "politics"), (20, 0, "evening")]  # 7 a day
-AHEAD_MAX = 110   # prepare a slot at most ~1 h 50 m before it, so the news is fresh
-LATE_MAX = 60     # still post a missed slot up to 1 h late (next slot is 2 h later)
+KINDS = {6: "morning", 7: "morning", 8: "politics", 9: "breaking", 10: "politics", 11: "breaking",
+         12: "publicinfo", 13: "breaking", 14: "politics", 15: "publicinfo", 16: "breaking", 17: "politics",
+         18: "evening", 19: "breaking", 20: "evening", 21: "politics", 22: "evening"}
+SLOTS = [(h, 0, k) for h, k in KINDS.items()]  # 17 a day, every hour 06:00-22:00
+BREAK_HOURS = range(6, 22)   # extra breaking Reels only while people are awake
+BREAK_GAP = 75               # minutes between two breaking Reels
+BREAK_MAX_24H = 25           # total posts in 24 h before breaking checks stop (Meta cap is 30)
+AHEAD_MAX = 58    # prepare a slot at most ~1 h before it (cron-job.org runs at :05 and :35)
+LATE_MAX = 40     # still post a missed slot up to 40 min late (next slot is 1 h later)
 MIN_LEAD = 15     # Facebook needs the scheduled time >= 10 min ahead; below this publish immediately
 POSTED = Path(__file__).resolve().parent.parent / "posted.json"
 
@@ -45,10 +50,35 @@ def due_slot(posted, now=None):
     return None
 
 
+def breaking_due(posted, now=None):
+    """A breaking check is allowed when no slot is due, during waking hours, not too soon after the last one."""
+    now = now or datetime.now(NPT)
+    if now.astimezone(NPT).hour not in BREAK_HOURS:
+        return None
+    recent = []
+    for p in posted:
+        try:
+            recent.append((datetime.fromisoformat(p["published_at"]), p.get("slot_key") or ""))
+        except Exception:
+            pass
+    if sum(1 for t, _ in recent if now - t < timedelta(hours=24)) >= BREAK_MAX_24H:
+        return None
+    if any(k.startswith("brk-") and now - t < timedelta(minutes=BREAK_GAP) for t, k in recent):
+        return None
+    return "brk-" + now.astimezone(NPT).strftime("%Y-%m-%d-%H%M")
+
+
 def main():
-    slot = due_slot(load_posted())
+    posted = load_posted()
+    slot = due_slot(posted)
+    brk = None if slot else breaking_due(posted)
     out = os.getenv("GITHUB_OUTPUT")
-    lines = ["due=none"] if not slot else ["due=yes", f"key={slot[0]}", f"time={slot[1].isoformat()}", f"kind={slot[2]}"]
+    if slot:
+        lines = ["due=yes", f"key={slot[0]}", f"time={slot[1].isoformat()}", f"kind={slot[2]}", "breaking=0"]
+    elif brk:
+        lines = ["due=yes", f"key={brk}", "time=", "kind=breaking", "breaking=1"]
+    else:
+        lines = ["due=none"]
     print("[schedule] " + " ".join(lines))
     if out:
         with open(out, "a") as f:
