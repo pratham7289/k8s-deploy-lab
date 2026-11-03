@@ -1,0 +1,17 @@
+name: probe
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe feeds
+        run: |
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          for u in https://ekantipur.com/rss https://ekantipur.com/feed https://ekantipur.com/robots.txt https://ekantipur.com/sitemap.xml https://ekantipur.com/news-sitemap.xml https://ekantipur.com/sitemap-news.xml https://ekantipur.com/ https://ujyaaloonline.com/ https://ujyaaloonline.com/feed https://ujyaaloonline.com/feed/ https://ujyaaloonline.com/rss https://ujyaaloonline.com/robots.txt https://ujyaaloonline.com/sitemap.xml https://www.onlinekhabar.com/feed https://www.onlinekhabar.com/sitemap.xml https://www.setopati.com/feed; do
+            code=$(curl -sL -A "$UA" -o /tmp/b -w '%{http_code} %{content_type} %{size_download}' --max-time 20 "$u")
+            echo "PROBE $u -> $code"
+            head -c 300 /tmp/b | tr '\n' ' ' | sed 's/^/   BODY /'; echo
+            grep -oiE '(rss|atom|sitemap)[^"<> ]{0,80}' /tmp/b | sort -u | head -8 | sed 's/^/   LINK /'
+          done
