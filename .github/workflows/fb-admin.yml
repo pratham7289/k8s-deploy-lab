@@ -31,4 +31,5 @@ jobs:
           FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
         run: python scripts/fb_admin.py ${{ github.event.inputs.cmd || 'stats' }} ${{ github.event.inputs.args }}
       - name: Save state
-        run: python3 scripts/save_state.py "admin: $(date -u +%FT%TZ)"
+        run: |
+          python3 scripts/save_state.py "admin $(date -u +%FT%TZ)"

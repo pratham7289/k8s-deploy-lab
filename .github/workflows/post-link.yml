@@ -51,7 +51,8 @@ jobs:
           MODE: ${{ github.event.inputs.mode || 'publish' }}
         run: python -m pipeline.main
       - name: Save state
-        run: python3 scripts/save_state.py "link: $(date -u +%FT%TZ)"
+        run: |
+          python3 scripts/save_state.py "link $(date -u +%FT%TZ)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
