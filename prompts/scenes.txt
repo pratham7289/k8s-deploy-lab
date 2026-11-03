@@ -15,6 +15,8 @@ For each scene return:
 Visual rules:
 - Pictures must show the TOPIC, never a literal reading of a word. The outlet's name is not a topic (Kathmandu POST is not a letter-box, Online KHABAR is not a newspaper); "your opinion" / "what do you think" scenes get Nepal street or crowd-free city footage, not books or letters.
 - Places must be in Nepal: write "Kathmandu city aerial", "Kathmandu street traffic", "Nepal hills village", never a generic "city skyline" (that returns foreign cities).
+- Never put dates, weekdays, times or numbers in query_en / video_query (they return calendars and clocks). For a festival name the festival ("Tihar Bhai Tika Nepal", "Dashain tika"), not "celebration" or "party" (those return concerts).
+- Never use pictures of fires, protests or riots unless the sentences are about one.
 - For courts, parliament, government, laws or the constitution use the building (Supreme Court of Nepal, Federal Parliament of Nepal, Singha Durbar) or a neutral object (gavel, documents), never a person.
 
 Rules: never choose images of identifiable people at all (no politicians, judges, officials, victims, private individuals), victims, injuries, or children. For politicians use their office/building ("Office of the Prime Minister and Council of Ministers", wiki_title "Singha Durbar"), not their face. For a ministry, use the ministry's building or Singha Durbar. For weather use the place affected. For prices use the product or the market.

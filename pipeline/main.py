@@ -163,7 +163,7 @@ def main():
         except Exception as e:
             print(f"[main] info card failed: {e}")
         want = max(1, min(3, round(est / 4)) - len(info))
-        sc["visuals"] = info + scenes.fetch_for_scene(sc, work, i, want=want, used=used)
+        sc["visuals"] = info + scenes.fetch_for_scene(sc, work, i, want=want, used=used, headline=pack.get("headline", ""))
         shots += len(sc["visuals"])
     print(f"[main] scenes={len(plan)} visuals={shots} ({time.time() - t0:.0f}s so far)")
 

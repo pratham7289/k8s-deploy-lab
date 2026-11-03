@@ -140,12 +140,58 @@ def _videos(q: str, n: int):
     """Real moving footage (vertical stock video) for a query."""
     if not q:
         return []
-    out = [(t, url, dur, "Pixabay") for t, url, dur in visuals.search(q, n + 2, "videos") if t == "video"]
+    out = [(t, url, dur, "Pixabay") for t, url, dur in visuals.search(q, n + 4, "videos") if t == "video"]
     random.shuffle(out)
     return out
 
 
-def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: set | None = None):
+CHECK = """You are the picture editor of a Nepali TV news Reel. This picture would be shown while the presenter says:
+"{text}"
+(story headline: "{headline}"; picture subject wanted: "{subject}")
+Reject the picture (ok=false) if ANY of these is true:
+- a real person's face is clearly recognisable (close-up or medium shot of a specific person). Distant crowds, hands, backs are fine.
+- it shows fire, riots, burning buildings, blood, weapons or violence, unless the sentence is about exactly that
+- a foreign country's flag, landmark or city when the story is about Nepal
+- big readable text, words, dates or numbers in the image (e.g. a calendar, a sign) that are not about the story
+- a concert, party, nightclub, sports or entertainment scene when the story is not about that
+- religious paintings, cartoons, illustrations or memes
+- it is plainly unrelated to the sentence, or would mislead a viewer about what happened
+Otherwise ok=true. Return only JSON: {{"ok": true|false, "why": "<5 words>"}}"""
+
+
+def _frame(path: Path) -> bytes | None:
+    import subprocess
+    if path.suffix == ".jpg":
+        src = ["-i", str(path)]
+    else:
+        src = ["-ss", "1.5", "-i", str(path)]
+    try:
+        return subprocess.run(["ffmpeg", "-v", "error", *src, "-frames:v", "1", "-vf", "scale=512:-2",
+                               "-f", "image2", "-c:v", "mjpeg", "-"], capture_output=True, timeout=30).stdout or None
+    except Exception:
+        return None
+
+
+def suitable(path: Path, scene: dict, headline: str) -> bool:
+    """Gemini looks at the picture before it is used. Fails open (keeps it) if the check itself errors."""
+    if not config.GEMINI_API_KEY:
+        return True
+    img = _frame(path)
+    if not img:
+        return True
+    try:
+        res = llm.ask_image(CHECK.format(text=scene.get("text", "")[:400], headline=headline[:150],
+                                         subject=scene.get("subject", "")), img)
+    except Exception as e:
+        print(f"[check] skipped: {e}")
+        return True
+    ok = bool(res.get("ok", True))
+    if not ok:
+        print(f"[check] rejected {path.name}: {res.get('why', '')}")
+    return ok
+
+
+def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: set | None = None, headline: str = ""):
     """Return up to `want` visuals [(kind, path, dur, credit)] for one scene.
     Mix: about half real moving footage (stock video for `video_query`), the rest the most relevant
     photos of the named subject. Scene 0 opens on motion so the first second is not a still."""
@@ -167,8 +213,8 @@ def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: s
             p = workdir / f"s{idx}_{len(got)}{ext}"
             try:
                 visuals.download(url, p)
-                if p.stat().st_size > 20_000:
-                    used.add(url)
+                used.add(url)
+                if p.stat().st_size > 20_000 and suitable(p, scene, headline):
                     got.append((kind, p, dur, credit))
             except Exception as e:
                 print(f"[scene {idx}] download failed: {e}")
@@ -180,12 +226,14 @@ def fetch_for_scene(scene: dict, workdir: Path, idx: int, want: int = 2, used: s
     photos = []
     need = want - len(vids)
     if need > 0:
-        sources_ = ([lambda: wikipedia(scene.get("wiki_title") or subject, 4), lambda: commons(subject, 4)]
-                    if named else [lambda: _stock(q_en, ("photos",)), lambda: commons(subject, 3)])
+        sources_ = ([lambda: wikipedia(scene.get("wiki_title") or subject, 6), lambda: commons(subject, 6)]
+                    if named else [lambda: _stock(q_en, ("photos",)), lambda: commons(subject, 5)])
         for get in sources_:
             photos = take(get(), need, photos)
             if len(photos) >= need:
                 break
+    if not vids and not photos:  # everything rejected: neutral Nepal footage beats a wrong picture
+        vids = take(_videos("Kathmandu city aerial", 1), 1, [])
     # named subject: its photo first (relevance), then footage; scene 0 / generic: footage first (motion)
     got = (photos + vids) if (named and idx > 0) else (vids + photos)
     print(f"[scene {idx}] {sum(1 for g in got if g[0] == 'video')} video + {sum(1 for g in got if g[0] != 'video')} photo")
