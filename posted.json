@@ -321,5 +321,16 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-03T19:00:00+05:45",
   "published_at": "2026-11-03T19:00:00+05:45"
+ },
+ {
+  "id": "1f22a5dc24e8",
+  "title": "यस वर्षको भाइटीकाको शुभसाइत कात्तिक २५ गते बिहान ११:०७ बजे",
+  "fb_video_id": "1825235205281471",
+  "source": "Image Khabar",
+  "slot": "politics",
+  "slot_key": "2026-11-03-2000",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-03T20:00:00+05:45",
+  "published_at": "2026-11-03T20:00:00+05:45"
  }
 ]
