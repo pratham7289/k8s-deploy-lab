@@ -332,5 +332,16 @@
   "state": "SCHEDULED",
   "scheduled_for": "2026-11-03T20:00:00+05:45",
   "published_at": "2026-11-03T20:00:00+05:45"
+ },
+ {
+  "id": "d9451217abdd",
+  "title": "Lumbini Lions dismantle Pokhara Avengers in emphatic NPL victory",
+  "fb_video_id": "4674765746001881",
+  "source": "Onlinekhabar English",
+  "slot": "evening",
+  "slot_key": "2026-11-03-2100",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-03T21:00:00+05:45",
+  "published_at": "2026-11-03T21:00:00+05:45"
  }
 ]
