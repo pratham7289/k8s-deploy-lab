@@ -274,7 +274,7 @@
   "source": "Onlinekhabar",
   "slot": "publicinfo",
   "slot_key": "2026-11-03-1500",
-  "state": "SCHEDULED",
+  "state": "DELETED",
   "scheduled_for": "2026-11-03T15:00:00+05:45",
   "published_at": "2026-11-03T15:00:00+05:45"
  },
