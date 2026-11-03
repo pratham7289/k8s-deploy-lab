@@ -12,6 +12,19 @@ PER_OUTLET = 4      # max stories per outlet in the shortlist the editor model s
 REPEAT_PENALTY = 8  # score points off per recent post from the same outlet
 
 
+def _recent_titles(hours=12):
+    """Titles posted (or scheduled) in the last `hours`, so the editor can reject the same event in new words."""
+    from datetime import datetime, timedelta, timezone
+    now, out = datetime.now(timezone.utc), []
+    for p in sources.load_posted():
+        try:
+            if now - datetime.fromisoformat(p["published_at"]) < timedelta(hours=hours) and p.get("state") != "DELETED":
+                out.append(p.get("title", ""))
+        except Exception:
+            pass
+    return out[-30:]
+
+
 def _recent_outlets(n=3):
     return [p.get("source", "") for p in sources.load_posted()[-n:]]
 
@@ -60,6 +73,7 @@ def pick(cands, slot: str):
     res = llm.ask_json(
         config.prompt("score"),
         json.dumps({"slot": slot, "preferred_categories": prefer, "trending_now": sources.TREND_CONTEXT,
+                    "already_posted_last_12h": _recent_titles(),
                     "candidates": rows}, ensure_ascii=False),
         temperature=0.2,
     )
@@ -70,7 +84,7 @@ def pick(cands, slot: str):
             i = int(row["i"]); sc = int(row["score"])
         except Exception:
             continue
-        if not row.get("verified", False) or row.get("reject"):
+        if not row.get("verified", False) or row.get("reject") or row.get("same_as_posted"):
             continue
         if sc < config.MIN_SCORE or i >= len(cands):
             continue

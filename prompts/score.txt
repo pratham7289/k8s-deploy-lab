@@ -17,8 +17,10 @@ Score BELOW 50: internal party committee posts, local party elections, individua
 
 Set "verified": true when a named mainstream outlet reports it (Onlinekhabar, Kantipur, Setopati, Ratopati, BBC Nepali, The Kathmandu Post, Gorkhapatra, Annapurna Post, Nagarik, Himal Khabar, Khabarhub, Baahrakhari, Nepal Press, Lokaantar, Nepal News, Image Khabar, Ujyaalo, the Indian outlets, DHM, a ministry). Social trends alone are never verification: a trend is only usable through a news report about it.
 
+NO REPEATS: already_posted_last_12h lists what the page has already posted. Set "same_as_posted": true for every candidate about the SAME event, incident, case, meeting or announcement as any of those titles, even when the wording, spelling (हेलिकोप्टर / हेलिकप्टर), outlet or angle differs, and even when it is an "update" with new numbers. Viewers must never see the same story twice in a day.
+
 Set "reject": true (with reason) for: rumours; claims or allegations reported by only ONE outlet (an allegation carried by several mainstream outlets is allowed — the script will attribute it); celebrity gossip; graphic injury or death detail; communal or religious provocation; clickbait with no information; sponsored content; anything that is only a headline with no checkable fact.
 
 Category must be one of: news, politics, breaking, accident, disaster, weather, publicinfo, notice, trending, economy, india.
 
-Return ONLY JSON: {"scored":[{"i":0,"score":82,"category":"politics","verified":true,"reject":false,"reason":"..."}]}
+Return ONLY JSON: {"scored":[{"i":0,"score":82,"category":"politics","verified":true,"reject":false,"same_as_posted":false,"reason":"..."}]}
