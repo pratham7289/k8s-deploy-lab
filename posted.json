@@ -222,5 +222,16 @@
   "state": "DELETED",
   "scheduled_for": "2026-11-03T11:00:00+05:45",
   "published_at": "2026-11-03T11:00:00+05:45"
+ },
+ {
+  "id": "aa588d11af6a",
+  "title": "सुनको मूल्य बढ्यो, चाँदी घट्यो",
+  "fb_video_id": "1673766997610952",
+  "source": "Onlinekhabar",
+  "slot": "breaking",
+  "slot_key": "2026-11-03-1300",
+  "state": "SCHEDULED",
+  "scheduled_for": "2026-11-03T13:00:00+05:45",
+  "published_at": "2026-11-03T13:00:00+05:45"
  }
 ]
