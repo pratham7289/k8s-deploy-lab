@@ -2,6 +2,7 @@
 
   python scripts/fb_admin.py delete <video_id> [<video_id> ...]
   python scripts/fb_admin.py stats
+  python scripts/fb_admin.py list      (every Reel on the Page, scheduled ones too, duplicates marked)
 """
 import json
 import os
@@ -41,6 +42,39 @@ def main():
                     if p.get("fb_video_id") == vid:
                         p["state"] = "DELETED"
         config.POSTED.write_text(json.dumps(posted, ensure_ascii=False, indent=1), encoding="utf-8")
+    elif cmd == "list":
+        seen, rows = {}, []
+        for edge, extra in (("video_reels", {}), ("videos", {"type": "uploaded"}), ("scheduled_posts", {})):
+            url = f"{config.GRAPH}/{config.FB_PAGE_ID}/{edge}"
+            params = {"fields": "id,description,created_time,published,scheduled_publish_time,status",
+                      "limit": 100, "access_token": tok, **extra}
+            if edge == "scheduled_posts":
+                params["fields"] = "id,message,created_time,scheduled_publish_time"
+            for _ in range(5):
+                r = requests.get(url, params=params, timeout=30)
+                if not r.ok:
+                    print(f"[admin] {edge}: {r.status_code} {r.text[:200]}"); break
+                d = r.json()
+                for v in d.get("data", []):
+                    if v["id"] in seen:
+                        continue
+                    seen[v["id"]] = 1
+                    first = ((v.get("description") or v.get("message") or "").strip().split("\n") or [""])[0][:90]
+                    st = v.get("status") or {}
+                    rows.append((v.get("created_time", ""), v["id"], edge, v.get("published"),
+                                 v.get("scheduled_publish_time"), (st.get("video_status") if isinstance(st, dict) else st), first))
+                nxt = d.get("paging", {}).get("next")
+                if not nxt:
+                    break
+                url, params = nxt, {}
+        rows.sort()
+        firsts = {}
+        for row in rows:
+            key = row[6]
+            dup = f"DUPLICATE of {firsts[key]}" if key and key in firsts else ""
+            firsts.setdefault(key, row[1])
+            print(f"[list] {row[0]} id={row[1]} via={row[2]} published={row[3]} at={row[4]} status={row[5]} {dup} | {row[6]}")
+        print(f"[list] {len(rows)} items")
     elif cmd == "stats":
         analytics.update(json.loads(config.POSTED.read_text()), tok, days=30)
 

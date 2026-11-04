@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       cmd:
-        description: "delete | stats"
+        description: "delete | stats | list"
         default: stats
       args:
         description: "video ids for delete (space separated)"
@@ -34,7 +34,7 @@ jobs:
           CMD: ${{ github.event.inputs.cmd || 'stats' }}
           ARGS: ${{ github.event.inputs.args }}
         run: |
-          case "$CMD" in delete|stats) ;; *) echo "unknown cmd"; exit 1;; esac
+          case "$CMD" in delete|stats|list) ;; *) echo "unknown cmd"; exit 1;; esac
           ARGS_CLEAN=$(printf '%s' "$ARGS" | tr -cd '0-9 ')   # video ids are digits only
           python scripts/fb_admin.py "$CMD" $ARGS_CLEAN
       - name: Save state
