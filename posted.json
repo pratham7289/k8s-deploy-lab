@@ -318,7 +318,7 @@
   "source": "Setopati",
   "slot": "evening",
   "slot_key": "2026-11-03-1900",
-  "state": "SCHEDULED",
+  "state": "DELETED",
   "scheduled_for": "2026-11-03T19:00:00+05:45",
   "published_at": "2026-11-03T19:00:00+05:45"
  },
