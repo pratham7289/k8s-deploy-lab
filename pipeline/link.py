@@ -52,16 +52,22 @@ def story_from_link(url: str) -> dict:
     if r.status_code >= 400 or "Just a moment..." in page[:3000]:
         raise RuntimeError(f"{_source_name(url)} blocks automated readers (HTTP {r.status_code}). "
                            "Send a link to the same story from another site.")
-    page = re.sub(r"(?is)<(script|style|noscript|svg|header|footer|nav|aside)\b.*?</\1>", " ", page)
-    title = _meta(page, "og:title") or html.unescape(re.search(r"(?is)<title>(.*?)</title>", page).group(1)).strip()
-    title = re.sub(r"\s*[|\-–]\s*[^|\-–]{2,40}$", "", title).strip()  # drop " | Outlet" tails
+    # read title/description/date from the full page first (cleaning below can remove <head>)
+    tm = re.search(r"(?is)<title[^>]*>(.*?)</title>", page)
+    title = _meta(page, "og:title") or _meta(page, "twitter:title") or (html.unescape(tm.group(1)).strip() if tm else "")
+    title = re.sub(r"\s*(::|[|–])\s*.*$", "", title).strip() if (" :: " in title or " | " in title) else title
+    title = re.sub(r"\s+-\s+[^-]{2,40}$", "", title).strip()  # drop " - Outlet" tails
     desc = _meta(page, "og:description") or _meta(page, "description")
+    pub = _meta(page, "article:published_time") or _meta(page, "datePublished")
+    if not title:
+        raise RuntimeError(f"could not find the headline at {url}.")
+    page = re.sub(r"(?s)<!--.*?-->", " ", page)  # e.g. Setopati starts with <!--<header>-->
+    page = re.sub(r"(?is)<(script|style|noscript|svg|header|footer|nav|aside)\b.*?</\1>", " ", page)
     paras = [html.unescape(sources.TAG.sub(" ", p)) for p in re.findall(r"(?is)<p\b[^>]*>(.*?)</p>", page)]
     paras = [" ".join(p.split()) for p in paras if len(p.split()) >= 6]
     body = " ".join(paras)[:6000]
     if len(body) < 300:
         raise RuntimeError(f"could not read the article text at {url} (only {len(body)} characters).")
-    pub = _meta(page, "article:published_time") or _meta(page, "datePublished")
     try:
         published = datetime.fromisoformat(pub.replace("Z", "+00:00")).astimezone(timezone.utc)
     except Exception:
