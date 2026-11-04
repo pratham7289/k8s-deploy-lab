@@ -62,7 +62,7 @@ def _reddit():
 
 
 def annotate(cands: list, posted: list, window_h: float = 8.0):
-    """Add s['trend'] (0-100) to each candidate; drop repeats of an event already posted in 12 h.
+    """Add s['trend'] (0-100) to each candidate; drop repeats of an event already posted in 3 days.
     Returns (kept_candidates, context_dict)."""
     now = datetime.now(timezone.utc)
     # 1) newsroom heat: stemmed word -> set of outlets using it in recent headlines
@@ -83,11 +83,11 @@ def annotate(cands: list, posted: list, window_h: float = 8.0):
     for t in x_terms + reddit + google:
         social_tokens |= tokens(t.replace("#", " ").replace("_", " "))
 
-    # 3) do not repeat an event posted in the last 12 h (same main words)
+    # 3) do not repeat an event posted in the last 3 days (same main words)
     recent = []
     for p in posted:
         try:
-            if now - datetime.fromisoformat(p["published_at"]) < timedelta(hours=12):
+            if now - datetime.fromisoformat(p["published_at"]) < timedelta(hours=72):
                 recent.append(tokens(p.get("title", "")))
         except Exception:
             pass

@@ -12,7 +12,7 @@ PER_OUTLET = 4      # max stories per outlet in the shortlist the editor model s
 REPEAT_PENALTY = 8  # score points off per recent post from the same outlet
 
 
-def _recent_titles(hours=12):
+def _recent_titles(hours=72):
     """Titles posted (or scheduled) in the last `hours`, so the editor can reject the same event in new words."""
     from datetime import datetime, timedelta, timezone
     now, out = datetime.now(timezone.utc), []
@@ -22,7 +22,7 @@ def _recent_titles(hours=12):
                 out.append(p.get("title", ""))
         except Exception:
             pass
-    return out[-30:]
+    return out[-60:]
 
 
 def _recent_outlets(n=3):
@@ -96,7 +96,7 @@ def pick(cands, slot: str):
     res = llm.ask_json(
         config.prompt("score"),
         json.dumps({"slot": slot, "preferred_categories": prefer, "trending_now": sources.TREND_CONTEXT,
-                    "already_posted_last_12h": _recent_titles(),
+                    "already_posted_last_3_days": _recent_titles(),
                     "candidates": rows}, ensure_ascii=False),
         temperature=0.2,
     )
