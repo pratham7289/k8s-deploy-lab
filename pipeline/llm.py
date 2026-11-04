@@ -39,11 +39,15 @@ def ask_json(system: str, user: str, temperature=0.4) -> dict:
     raise RuntimeError(f"Gemini failed: {last}")
 
 
+VISION_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-flash-latest"]  # lite first: more free requests/min
+
+
 def ask_image(prompt: str, jpeg: bytes, temperature=0.0) -> dict:
-    """One image + a question -> parsed JSON. Raises on failure (callers fail open)."""
+    """One image + a question -> parsed JSON. Raises on failure (callers fail open).
+    Kept cheap on purpose: one try per model, short timeout, no waiting on 429 (the caller has a time budget)."""
     import base64
     last = None
-    for model in config.GEMINI_MODELS:
+    for model in VISION_MODELS:
         try:
             r = requests.post(
                 URL.format(model=model, key=config.GEMINI_API_KEY),
@@ -51,13 +55,11 @@ def ask_image(prompt: str, jpeg: bytes, temperature=0.0) -> dict:
                     {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}},
                     {"text": prompt}]}],
                       "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"}},
-                timeout=60)
-            if r.status_code == 429:
-                last = "429"; time.sleep(20); continue
+                timeout=20)
             if r.status_code >= 400:
-                last = f"{r.status_code} {r.text[:120]}"; continue
+                last = f"{model} {r.status_code}"; continue
             text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
             return json.loads(re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.M).strip())
         except Exception as e:
-            last = str(e)
+            last = f"{model} {str(e)[:80]}"
     raise RuntimeError(f"Gemini vision failed: {last}")

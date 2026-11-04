@@ -172,22 +172,37 @@ def _frame(path: Path) -> bytes | None:
         return None
 
 
+_CHECK = {"start": None, "calls": 0, "fails": 0}
+CHECK_BUDGET_S = 300   # at most 5 min of picture checks per Reel, so the job never runs out of time
+CHECK_MAX_CALLS = 45
+CHECK_MAX_FAILS = 4    # Gemini busy/quota: stop checking for this Reel, keep the pictures
+
+
 def suitable(path: Path, scene: dict, headline: str) -> bool:
-    """Gemini looks at the picture before it is used. Fails open (keeps it) if the check itself errors."""
+    """Gemini looks at the picture before it is used. Fails open (keeps it) if the check errors or is over budget."""
+    import time
     if not config.GEMINI_API_KEY:
+        return True
+    st = _CHECK
+    st["start"] = st["start"] or time.time()
+    if (time.time() - st["start"] > CHECK_BUDGET_S or st["calls"] >= CHECK_MAX_CALLS
+            or st["fails"] >= CHECK_MAX_FAILS):
         return True
     img = _frame(path)
     if not img:
         return True
+    st["calls"] += 1
     try:
         res = llm.ask_image(CHECK.format(text=scene.get("text", "")[:400], headline=headline[:150],
                                          subject=scene.get("subject", "")), img)
     except Exception as e:
+        st["fails"] += 1
         print(f"[check] skipped: {e}")
+        if st["fails"] >= CHECK_MAX_FAILS:
+            print("[check] too many errors, picture check off for this Reel")
         return True
     ok = bool(res.get("ok", True))
-    if not ok:
-        print(f"[check] rejected {path.name}: {res.get('why', '')}")
+    print(f"[check] {'ok' if ok else 'rejected'} {path.name}: {res.get('why', '')}")
     return ok
 
 

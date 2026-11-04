@@ -46,7 +46,33 @@ def alert(subject, body):
         print(f"[alert] {e}")
 
 
+UPLOAD_STARTED = False
+
+
+def _release_claim(slot_key):
+    """The run ended without uploading anything: let a later attempt try this slot again."""
+    if not slot_key or UPLOAD_STARTED:
+        return
+    try:
+        posted = json.loads(config.POSTED.read_text())
+        for p in posted:
+            if p.get("slot_key") == slot_key and p.get("state") == "CLAIMED":
+                p["state"] = "RELEASED"
+        config.POSTED.write_text(json.dumps(posted, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"[main] nothing uploaded, slot {slot_key} released")
+    except Exception as e:
+        print(f"[main] release failed: {e}")
+
+
 def main():
+    try:
+        _main()
+    finally:
+        _release_claim(os.getenv("SLOT_KEY", ""))
+
+
+def _main():
+    global UPLOAD_STARTED
     config.FB_PAGE_TOKEN = token.refresh_if_needed(os.getenv('FB_APP_ID', ''), os.getenv('FB_APP_SECRET', ''))
     slot = os.getenv("SLOT_KIND") or config.slot_for_now()
     slot_key, slot_time = os.getenv("SLOT_KEY", ""), os.getenv("SLOT_TIME", "")
@@ -70,7 +96,8 @@ def main():
             slot_time = t.isoformat()
     print(f"[main] slot={slot} key={slot_key or 'manual'} for={slot_time or 'now'} mode={config.MODE} "
           f"posted24h={posts_last_24h(posted)}")
-    if slot_key and any(p.get("slot_key") == slot_key for p in posted):
+    if slot_key and any(p.get("slot_key") == slot_key and p.get("state") not in ("CLAIMED", "RELEASED")
+                        for p in posted):
         print("[main] slot already done"); return
     cap = 29 if link_url else config.MAX_POSTS_24H  # owner links may use the last slots under Meta's 30
     if config.MODE != "dry" and posts_last_24h(posted) >= cap:
@@ -192,12 +219,20 @@ def main():
                 state = "SCHEDULED"
             else:
                 at = None
+        title_now = pack.get("title", pack["headline"]).strip()
+        if any(p.get("title", "").strip() == title_now and p.get("fb_video_id") and p.get("state") != "DELETED"
+               for p in posted[-40:]):
+            print("[main] this exact story is already on the Page, not posting it again"); return
+        UPLOAD_STARTED = True   # from here a Reel may exist on Facebook: never release the slot
         vid = facebook.publish_reel(out, caption, state, int(at.timestamp()) if at else None)
         print(f"[main] {state.lower()} video {vid}" + (f" for {at.isoformat()}" if at else ""))
     except Exception as e:
         print(f"[main] publish failed: {e}")
         alert("Nepal Canvas: publish failed", f"{pack['headline']}\n{e}")
         return  # exit 0 on purpose
+    for p in posted:
+        if slot_key and p.get("slot_key") == slot_key and p.get("state") == "CLAIMED":
+            p["state"] = "USED"
     posted.append({"id": pack["id"], "title": pack.get("title", pack["headline"]), "fb_video_id": vid,
                    "source": pack.get("source", ""),
                    "slot": slot, "slot_key": (slot_key or None) if state != "DRAFT" else None, "state": state,

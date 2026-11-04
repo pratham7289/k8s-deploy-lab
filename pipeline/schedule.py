@@ -39,7 +39,7 @@ def load_posted():
 def due_slot(posted, now=None):
     """(key, slot_time, kind) of the earliest slot that is not done and is in the work window, else None."""
     now = now or datetime.now(NPT)
-    done = {p.get("slot_key") for p in posted if p.get("slot_key")}
+    done = {p.get("slot_key") for p in posted if p.get("slot_key") and p.get("state") != "RELEASED"}
     today = now.astimezone(NPT).date()
     for day in (today - timedelta(days=1), today, today + timedelta(days=1)):
         for h, m, kind in SLOTS:

@@ -42,12 +42,15 @@ def main(msg):
         theirs, ours = load(ROOT / "posted.json") or [], load(keep / "posted.json") or []
         merged, seen = [], {}
         for p in theirs + ours:  # ours later in the list -> wins
-            k = p.get("fb_video_id") or p.get("slot_key") or p.get("id")
+            k = p.get("fb_video_id") or (("claim-" + p["slot_key"]) if p.get("state") in ("CLAIMED", "RELEASED")
+                                         else p.get("slot_key")) or p.get("id")
             if k in seen:
                 merged[seen[k]] = p
             else:
                 seen[k] = len(merged); merged.append(p)
-        merged.sort(key=lambda p: p.get("published_at") or "")
+        # a claim and a release for the same slot share the key "claim-<slot>" -> ours wins above;
+        # a CLAIMED marker is kept (it blocks retries) but never duplicated
+        merged.sort(key=lambda p: p.get("published_at") or p.get("claimed_at") or "")
         (ROOT / "posted.json").write_text(json.dumps(merged[-500:], ensure_ascii=False, indent=1), encoding="utf-8")
         st = load(ROOT / "stats.json") or {}
         st.update(load(keep / "stats.json") or {})

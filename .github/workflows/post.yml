@@ -21,9 +21,11 @@ concurrency: post-reel
 jobs:
   reel:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          ref: main   # newest posted.json, not the (older) commit this run was queued on
       - name: Which slot is due?
         id: gate
         if: github.event_name == 'schedule' || github.event.inputs.when == 'slot'
@@ -38,22 +40,28 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$WHEN" != "slot" ]; then echo "run=yes" >> "$GITHUB_OUTPUT";
           elif [ "$DUE" = "yes" ]; then echo "run=yes" >> "$GITHUB_OUTPUT";
           else echo "run=no" >> "$GITHUB_OUTPUT"; echo "nothing due"; fi
+      - name: Claim the slot before any work (no duplicates even if this job is killed)
+        id: claim
+        if: steps.go.outputs.run == 'yes' && steps.gate.outputs.key != ''
+        env:
+          KEY: ${{ steps.gate.outputs.key }}
+        run: python3 scripts/claim.py "$KEY"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        if: steps.go.outputs.run == 'yes'
+        if: steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
         with:
           python-version: "3.12"
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 >/dev/null
-        if: steps.go.outputs.run == 'yes'
+        if: steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
       - run: pip install -q -r requirements.txt
-        if: steps.go.outputs.run == 'yes'
+        if: steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
       - name: Fetch fonts (OFL) if missing
-        if: steps.go.outputs.run == 'yes'
+        if: steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
         run: |
           mkdir -p assets/fonts
           [ -f assets/fonts/NotoSansDevanagari.ttf ] || curl -sSL -o assets/fonts/NotoSansDevanagari.ttf "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
           [ -f assets/fonts/NotoSans.ttf ] || curl -sSL -o assets/fonts/NotoSans.ttf "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"
       - name: Run pipeline
-        if: steps.go.outputs.run == 'yes'
+        if: steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -72,7 +80,7 @@ jobs:
           MODE: ${{ github.event.inputs.mode || 'publish' }}
         run: python -m pipeline.main
       - name: Save state
-        if: steps.go.outputs.run == 'yes'
+        if: always() && steps.go.outputs.run == 'yes' && steps.claim.outputs.claimed != 'no'
         run: |
           python3 scripts/save_state.py "post $(date -u +%FT%TZ)"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
