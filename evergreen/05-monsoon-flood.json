@@ -22,5 +22,12 @@
   "flooded river",
   "landslide hill road"
  ],
- "source": "जल तथा मौसम विज्ञान विभाग"
+ "source": "जल तथा मौसम विज्ञान विभाग",
+ "months": [
+  5,
+  6,
+  7,
+  8,
+  9
+ ]
 }

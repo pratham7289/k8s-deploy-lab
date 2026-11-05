@@ -39,7 +39,7 @@ SLOTS = {
     "politics":   {"prefer": ["politics"],               "fallback": "any"},
     "breaking":   {"prefer": ["breaking", "accident", "disaster"], "fallback": "trending"},
     "publicinfo": {"prefer": ["publicinfo", "notice"],   "fallback": "evergreen"},
-    "evening":    {"prefer": ["news", "politics"],       "fallback": "evergreen"},
+    "evening":    {"prefer": ["news", "politics"],       "fallback": "any"},  # real news beats a tips Reel at prime time
 }
 
 

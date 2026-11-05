@@ -15,13 +15,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 NPT = timezone(timedelta(hours=5, minutes=45))
-# 10 a day at the hours Nepali Facebook is busiest: morning, lunch, evening
-KINDS = {7: "morning", 8: "politics", 10: "breaking", 12: "publicinfo", 13: "politics",
-         15: "breaking", 17: "publicinfo", 19: "evening", 20: "politics", 21: "evening"}
+# 10 a day, weighted to the evening: on this Page Reels posted 15:00-21:00 get ~200-320 plays,
+# morning/midday ones ~10. One morning and one lunch slot keep the Page alive during the day.
+KINDS = {7: "morning", 12: "publicinfo", 15: "politics", 16: "evening", 17: "politics",
+         18: "evening", 19: "politics", 20: "evening", 21: "politics", 22: "evening"}
 SLOTS = [(h, 0, k) for h, k in KINDS.items()]
 BREAK_HOURS = range(6, 22)   # extra breaking Reels only while people are awake
 BREAK_GAP = 180              # minutes between two breaking Reels
-BREAK_PER_DAY = 3            # at most 3 genuinely breaking Reels a day
+BREAK_PER_DAY = 1            # breaking Reels under-perform here (43-58 plays): at most 1 a day
 BREAK_MAX_24H = 25           # total posts in 24 h before breaking checks stop (Meta cap is 30)
 AHEAD_MAX = 58    # prepare a slot at most ~1 h before it (cron-job.org runs at :05 and :35)
 LATE_MAX = 40     # still post a missed slot up to 40 min late (next slot is 1 h later)

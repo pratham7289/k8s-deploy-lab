@@ -25,7 +25,9 @@ def posts_last_24h(posted):
 
 def evergreen_item(posted):
     used = {p["id"] for p in posted}
-    items = sorted(config.EVERGREEN.glob("*.json"))
+    month = datetime.now(config.NPT).month
+    items = [p for p in sorted(config.EVERGREEN.glob("*.json"))
+             if month in json.loads(p.read_text(encoding="utf-8")).get("months", range(1, 13))]  # in season only
     fresh = [p for p in items if f"ever-{p.stem}" not in used] or items
     p = random.choice(fresh)
     data = json.loads(p.read_text(encoding="utf-8"))
